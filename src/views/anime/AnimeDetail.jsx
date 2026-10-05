@@ -56,6 +56,8 @@ const EpisodeServers = ({ episodeId }) => {
   const [loading, setLoading] = useState(false)
   const [serverUrl, setServerUrl] = useState('')
   const [serverLabel, setServerLabel] = useState('')
+  const [serverId, setServerId] = useState('')
+  const [fromCache, setFromCache] = useState(false)
   const [loadingServer, setLoadingServer] = useState(false)
   const [error, setError] = useState('')
 
@@ -80,15 +82,18 @@ const EpisodeServers = ({ episodeId }) => {
     }
   }
 
-  const loadServer = async (serverId, label) => {
+  const loadServer = async (sid, label, fresh = false) => {
     setLoadingServer(true)
     setServerUrl('')
     setServerLabel(label)
+    setServerId(sid)
+    setFromCache(false)
     try {
-      const res = await fetch(`${API_BASE}/api/server/${serverId}`)
+      const res = await fetch(`${API_BASE}/api/server/${sid}${fresh ? '?fresh=1' : ''}`)
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || 'Gagal memuat server')
       setServerUrl(j.data.url)
+      setFromCache(!!j.cached)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -126,12 +131,31 @@ const EpisodeServers = ({ episodeId }) => {
           {loadingServer && <CSpinner size="sm" />}
           {serverUrl && (
             <div className="mt-2">
-              <div className="small text-body-secondary">Server {serverLabel}:</div>
+              <div className="small text-body-secondary">
+                Server {serverLabel}:
+                {fromCache && (
+                  <CBadge color="success" className="ms-2">
+                    tersimpan di database
+                  </CBadge>
+                )}
+              </div>
               <code className="text-break small">{serverUrl}</code>
-              <div className="mt-1">
+              <div className="mt-1 d-flex gap-3">
                 <a href={serverUrl} target="_blank" rel="noreferrer" className="small">
                   Buka stream
                 </a>
+                {fromCache && (
+                  <a
+                    href="#"
+                    className="small"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      loadServer(serverId, serverLabel, true)
+                    }}
+                  >
+                    Ambil ulang dari API
+                  </a>
+                )}
               </div>
             </div>
           )}

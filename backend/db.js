@@ -57,6 +57,12 @@ db.exec(`
     episode_list TEXT,
     updated_at DATETIME DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS stream_cache (
+    server_id TEXT PRIMARY KEY,
+    url TEXT NOT NULL,
+    fetched_at DATETIME DEFAULT (datetime('now', 'localtime'))
+  );
 `)
 
 // Kolom tambahan untuk sumber animehome (dibuat bila belum ada).
@@ -219,4 +225,18 @@ export function stats() {
        FROM home GROUP BY source`
     )
     .all()
+}
+
+// URL stream per serverId — simpan saat pertama diambil, pakai lagi tanpa ke API.
+export function getStreamUrl(serverId) {
+  const row = db.prepare('SELECT url FROM stream_cache WHERE server_id = ?').get(serverId)
+  return row?.url || ''
+}
+
+export function saveStreamUrl(serverId, url) {
+  db.prepare(
+    `INSERT INTO stream_cache (server_id, url, fetched_at)
+     VALUES (?, ?, datetime('now', 'localtime'))
+     ON CONFLICT(server_id) DO UPDATE SET url = excluded.url, fetched_at = excluded.fetched_at`
+  ).run(serverId, url)
 }

@@ -10,6 +10,8 @@ import {
   listSchedule,
   getAnimeDetail,
   saveAnimeDetail,
+  getStreamUrl,
+  saveStreamUrl,
   stats,
 } from './db.js'
 import {
@@ -133,11 +135,18 @@ app.get('/api/episode/:episodeId', async (req, res) => {
   }
 })
 
-// URL stream dari sebuah serverId — live dari API
+// URL stream dari sebuah serverId — dari database bila sudah tersimpan,
+// kalau belum baru ambil live dari API lalu simpan. ?fresh=1 memaksa ambil live.
 app.get('/api/server/:serverId', async (req, res) => {
   try {
-    const data = await fetchServer(req.params.serverId)
-    res.json({ ok: true, data })
+    const { serverId } = req.params
+    if (!req.query.fresh) {
+      const cached = getStreamUrl(serverId)
+      if (cached) return res.json({ ok: true, data: { url: cached }, cached: true })
+    }
+    const data = await fetchServer(serverId)
+    if (data?.url) saveStreamUrl(serverId, data.url)
+    res.json({ ok: true, data, cached: false })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
   }
