@@ -8,7 +8,7 @@
 
 export const SOURCES = {
   animehome: {
-    label: 'Anime Home',
+    label: 'Otaku',
     url: 'https://www.sankavollerei.web.id/anime/home',
   },
   samehadaku: {
