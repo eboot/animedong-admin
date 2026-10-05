@@ -12,16 +12,26 @@ import {
   saveAnimeDetail,
   getStreamUrl,
   saveStreamUrl,
+  insertDonghua,
+  listDonghua,
+  getDonghuaDetail,
+  saveDonghuaDetail,
+  getDonghuaStream,
+  saveDonghuaStream,
   stats,
 } from './db.js'
 import {
   SOURCES,
   SCHEDULE_SOURCE,
+  DONGHUA_SOURCES,
   scrapeSource,
   scrapeSchedule,
+  scrapeDonghua,
   fetchAnimeDetail,
   fetchEpisode,
   fetchServer,
+  fetchDonghuaDetail,
+  fetchDonghuaEpisode,
 } from './scrape.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -154,6 +164,92 @@ app.get('/api/server/:serverId', async (req, res) => {
 
 app.get('/api/stats', (req, res) => {
   res.json(stats())
+})
+
+// ---- Donghua ----
+
+// Daftar sumber API donghua (untuk dropdown frontend)
+app.get('/api/donghua/sources', (req, res) => {
+  res.json(
+    Object.entries(DONGHUA_SOURCES).map(([key, s]) => ({
+      key,
+      label: s.label,
+      url: s.url,
+    }))
+  )
+})
+
+// List donghua yang sudah di-scrape, sort terbaru dulu
+app.get('/api/donghua', (req, res) => {
+  const { q, page, limit } = req.query
+  res.json(
+    listDonghua({
+      q: q || undefined,
+      page: Math.max(1, parseInt(page) || 1),
+      limit: Math.min(200, Math.max(1, parseInt(limit) || 50)),
+    })
+  )
+})
+
+// Scrape + simpan ke database (duplikat dilewati).
+// Body: { source } — key 'donghua' atau URL API-nya langsung.
+app.post('/api/donghua/scrape', async (req, res) => {
+  const { source } = req.body ?? {}
+  const key =
+    DONGHUA_SOURCES[source]
+      ? source
+      : Object.keys(DONGHUA_SOURCES).find((k) => DONGHUA_SOURCES[k].url === source)
+  if (!key) {
+    return res.status(400).json({ error: 'Pilih sumber dulu: donghua' })
+  }
+  try {
+    const result = await scrapeDonghua(insertDonghua)
+    res.json({ ok: true, ...result })
+  } catch (e) {
+    res.status(502).json({ ok: false, error: e.message })
+  }
+})
+
+// Detail donghua: dari database bila ada, bila belum — ambil live dari API.
+// Param ?fresh=1 memaksa ambil live walau sudah ada di database.
+app.get('/api/donghua/:slug', async (req, res) => {
+  const { slug } = req.params
+  if (!req.query.fresh) {
+    const saved = getDonghuaDetail(slug)
+    if (saved) return res.json({ from: 'db', data: saved })
+  }
+  try {
+    const data = await fetchDonghuaDetail(slug)
+    res.json({ from: 'live', data })
+  } catch (e) {
+    res.status(502).json({ error: e.message })
+  }
+})
+
+// Simpan / update detail donghua (dari form edit)
+app.put('/api/donghua/:slug', (req, res) => {
+  const { slug } = req.params
+  const d = req.body ?? {}
+  if (!d.title) return res.status(400).json({ error: 'Judul wajib diisi' })
+  saveDonghuaDetail(slug, d)
+  res.json({ ok: true, data: getDonghuaDetail(slug) })
+})
+
+// Daftar server streaming sebuah episode donghua — dari database bila sudah
+// tersimpan, kalau belum ambil live dari API lalu simpan. ?fresh=1 memaksa live.
+app.get('/api/donghua/episode/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params
+    if (!req.query.fresh) {
+      const cached = getDonghuaStream(slug)
+      if (cached) return res.json({ ok: true, data: cached, cached: true })
+    }
+    const data = await fetchDonghuaEpisode(slug)
+    saveDonghuaStream(slug, data)
+    res.json({ ok: true, data, cached: false })
+  } catch (e) {
+    res.status(502).json({ ok: false, error: e.message })
+  }
 })
 
 // Sajikan build frontend jika ada (npm run build di root -> build/)

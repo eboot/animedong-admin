@@ -63,6 +63,48 @@ db.exec(`
     url TEXT NOT NULL,
     fetched_at DATETIME DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS donghua (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    title TEXT NOT NULL,
+    poster TEXT,
+    status TEXT,
+    type TEXT,
+    current_episode TEXT,
+    scraped_at DATETIME DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(source, slug)
+  );
+  CREATE INDEX IF NOT EXISTS idx_donghua_scraped ON donghua(scraped_at DESC);
+
+  CREATE TABLE IF NOT EXISTS donghua_detail (
+    slug TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    poster TEXT,
+    cover TEXT,
+    status TEXT,
+    type TEXT,
+    rating TEXT,
+    studio TEXT,
+    network TEXT,
+    released TEXT,
+    duration TEXT,
+    episodes_count TEXT,
+    season TEXT,
+    country TEXT,
+    subber TEXT,
+    genres TEXT,
+    synopsis TEXT,
+    episodes_list TEXT,
+    updated_at DATETIME DEFAULT (datetime('now', 'localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS donghua_stream (
+    slug TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    fetched_at DATETIME DEFAULT (datetime('now', 'localtime'))
+  );
 `)
 
 // Kolom tambahan untuk sumber animehome (dibuat bila belum ada).
@@ -239,4 +281,114 @@ export function saveStreamUrl(serverId, url) {
      VALUES (?, ?, datetime('now', 'localtime'))
      ON CONFLICT(server_id) DO UPDATE SET url = excluded.url, fetched_at = excluded.fetched_at`
   ).run(serverId, url)
+}
+
+// ---- Donghua ----
+
+const insertDonghuaStmt = db.prepare(`
+  INSERT OR IGNORE INTO donghua
+    (source, slug, title, poster, status, type, current_episode)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`)
+
+/** Insert satu donghua. Return true jika baris BARU (false = sudah ada). */
+export function insertDonghua(item) {
+  const r = insertDonghuaStmt.run(
+    item.source,
+    item.slug,
+    item.title,
+    item.poster ?? null,
+    item.status ?? null,
+    item.type ?? null,
+    item.current_episode ?? null
+  )
+  return r.changes === 1
+}
+
+export function listDonghua({ q, page = 1, limit = 50 } = {}) {
+  const where = []
+  const params = []
+  if (q) {
+    where.push('title LIKE ?')
+    params.push(`%${q}%`)
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const total = db
+    .prepare(`SELECT COUNT(*) AS c FROM donghua ${whereSql}`)
+    .get(...params).c
+  const rows = db
+    .prepare(
+      `SELECT * FROM donghua ${whereSql}
+       ORDER BY scraped_at DESC, id DESC
+       LIMIT ? OFFSET ?`
+    )
+    .all(...params, limit, (page - 1) * limit)
+  return { total, page, limit, rows }
+}
+
+export function getDonghuaDetail(slug) {
+  const row = db.prepare(`SELECT * FROM donghua_detail WHERE slug = ?`).get(slug)
+  if (!row) return null
+  return {
+    ...row,
+    genres: safeJson(row.genres, []),
+    episodes_list: safeJson(row.episodes_list, []),
+  }
+}
+
+const upsertDonghuaDetailStmt = db.prepare(`
+  INSERT INTO donghua_detail
+    (slug, title, poster, cover, status, type, rating, studio, network,
+     released, duration, episodes_count, season, country, subber,
+     genres, synopsis, episodes_list, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+  ON CONFLICT(slug) DO UPDATE SET
+    title=excluded.title, poster=excluded.poster, cover=excluded.cover,
+    status=excluded.status, type=excluded.type, rating=excluded.rating,
+    studio=excluded.studio, network=excluded.network, released=excluded.released,
+    duration=excluded.duration, episodes_count=excluded.episodes_count,
+    season=excluded.season, country=excluded.country, subber=excluded.subber,
+    genres=excluded.genres, synopsis=excluded.synopsis,
+    episodes_list=excluded.episodes_list,
+    updated_at=datetime('now', 'localtime')
+`)
+
+/** Simpan/update detail donghua. `d.episodes_list`/`d.genres` boleh array (disimpan JSON). */
+export function saveDonghuaDetail(slug, d) {
+  const str = (v) => (v == null ? '' : String(v))
+  const js = (v) => JSON.stringify(v ?? [])
+  upsertDonghuaDetailStmt.run(
+    slug,
+    str(d.title),
+    str(d.poster),
+    str(d.cover),
+    str(d.status),
+    str(d.type),
+    str(d.rating),
+    str(d.studio),
+    str(d.network),
+    str(d.released),
+    str(d.duration),
+    str(d.episodes_count),
+    str(d.season),
+    str(d.country),
+    str(d.subber),
+    js(d.genres),
+    typeof d.synopsis === 'string' ? d.synopsis : js(d.synopsis),
+    js(d.episodes_list)
+  )
+}
+
+// Data streaming per episode donghua — simpan saat pertama diambil.
+export function getDonghuaStream(slug) {
+  const row = db.prepare('SELECT data FROM donghua_stream WHERE slug = ?').get(slug)
+  return safeJson(row?.data, null)
+}
+
+export function saveDonghuaStream(slug, data) {
+  db.prepare(
+    `INSERT INTO donghua_stream (slug, data, fetched_at)
+     VALUES (?, ?, datetime('now', 'localtime'))
+     ON CONFLICT(slug) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at`
+  ).run(slug, JSON.stringify(data))
 }
