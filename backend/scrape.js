@@ -1,0 +1,258 @@
+/**
+ * Scraper: ambil data dari API sankavollerei, normalisasi,
+ * simpan ke database "home". Duplikat (source + anime_id) dilewati.
+ *
+ * Field URL eksternal (samehadakuUrl / otakudesuUrl / url situs)
+ * SENGAJA tidak disimpan — sesuai permintaan.
+ */
+
+export const SOURCES = {
+  animehome: {
+    label: 'Anime Home',
+    url: 'https://www.sankavollerei.web.id/anime/home',
+  },
+  samehadaku: {
+    label: 'Samehadaku',
+    url: 'https://www.sankavollerei.web.id/anime/samehadaku/home',
+  },
+  anoboy: {
+    label: 'Anoboy',
+    url: 'https://www.sankavollerei.web.id/anime/anoboy/home?page=1',
+  },
+  animeindo: {
+    label: 'Animeindo',
+    url: 'https://www.sankavollerei.web.id/anime/stream/latest',
+  },
+}
+
+export const SCHEDULE_SOURCE = {
+  key: 'schedule',
+  label: 'Jadwal',
+  url: 'https://www.sankavollerei.web.id/anime/schedule',
+}
+
+const clean = (s) =>
+  typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : ''
+
+function normalizeSamehadaku(json) {
+  const out = []
+  const data = json?.data ?? {}
+  // Kumpulkan semua animeList dari tiap section (recent, dll).
+  for (const section of Object.values(data)) {
+    const list = section?.animeList
+    if (!Array.isArray(list)) continue
+    for (const a of list) {
+      if (!a?.animeId) continue
+      out.push({
+        source: 'samehadaku',
+        anime_id: String(a.animeId),
+        title: clean(a.title),
+        poster: a.poster || '',
+        episodes: clean(a.episodes),
+        released_on: clean(a.releasedOn),
+        type: '',
+        href: a.href || '',
+        // samehadakuUrl & otakudesuUrl TIDAK disimpan.
+      })
+    }
+  }
+  return out
+}
+
+function normalizeAnoboy(json) {
+  const list = json?.anime_list
+  if (!Array.isArray(list)) return []
+  return list
+    .filter((a) => a?.slug)
+    .map((a) => ({
+      source: 'anoboy',
+      anime_id: String(a.slug),
+      title: clean(a.title),
+      poster: a.poster || '',
+      episodes: clean(a.episode),
+      released_on: '',
+      type: clean(a.type),
+      href: '',
+      // field "url" (link situs anoboy) TIDAK disimpan.
+    }))
+}
+
+function normalizeAnimeindo(json) {
+  const list = json?.data
+  if (!Array.isArray(list)) return []
+  return list
+    .filter((a) => a?.slug)
+    .map((a) => ({
+      source: 'animeindo',
+      anime_id: String(a.slug),
+      title: clean(a.title),
+      poster: a.poster || '',
+      episodes: clean(a.episode) ? `Ep ${clean(a.episode)}` : '',
+      released_on: '',
+      type: '',
+      href: '',
+    }))
+}
+
+function normalizeAnimeHome(json) {
+  const out = []
+  const data = json?.data ?? {}
+  // Kumpulkan semua animeList dari tiap section (ongoing, completed, dll).
+  for (const section of Object.values(data)) {
+    const list = section?.animeList
+    if (!Array.isArray(list)) continue
+    for (const a of list) {
+      if (!a?.animeId) continue
+      out.push({
+        source: 'animehome',
+        anime_id: String(a.animeId),
+        title: clean(a.title),
+        poster: a.poster || '',
+        episodes:
+          a.episodes === '' || a.episodes == null ? '' : `Ep ${a.episodes}`,
+        released_on: clean(a.latestReleaseDate),
+        release_day: clean(a.releaseDay),
+        type: '',
+        href: a.href || '',
+        // otakudesuUrl TIDAK disimpan.
+      })
+    }
+  }
+  return out
+}
+
+const NORMALIZERS = {
+  animehome: normalizeAnimeHome,
+  samehadaku: normalizeSamehadaku,
+  anoboy: normalizeAnoboy,
+  animeindo: normalizeAnimeindo,
+}
+
+export async function scrapeSource(key, insertFn) {
+  const src = SOURCES[key]
+  if (!src) throw new Error(`Sumber tidak dikenal: ${key}`)
+  const res = await fetch(src.url, {
+    headers: {
+      'User-Agent': 'AnimeDongAdmin/1.0',
+      Accept: 'application/json',
+    },
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status} dari ${src.url}`)
+  const json = await res.json()
+  const items = NORMALIZERS[key](json)
+  let inserted = 0
+  for (const item of items) {
+    if (!item.title) continue
+    if (insertFn(item)) inserted++
+  }
+  return { source: key, total: items.length, inserted, skipped: items.length - inserted }
+}
+
+/** Scrape jadwal rilisan per hari. Simpan ke tabel `schedule`. */
+export async function scrapeSchedule(insertFn) {
+  const res = await fetch(SCHEDULE_SOURCE.url, {
+    headers: {
+      'User-Agent': 'AnimeDongAdmin/1.0',
+      Accept: 'application/json',
+    },
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status} dari ${SCHEDULE_SOURCE.url}`)
+  const json = await res.json()
+  const days = json?.data
+  if (!Array.isArray(days)) throw new Error('Format jadwal tidak dikenali')
+  let total = 0
+  let inserted = 0
+  for (const d of days) {
+    const list = d?.anime_list
+    if (!Array.isArray(list)) continue
+    for (const a of list) {
+      if (!a?.slug) continue
+      total++
+      // field "url" di sini path internal API (/anime/anime/...) — disimpan.
+      if (
+        insertFn({
+          day: clean(d.day),
+          anime_id: String(a.slug),
+          title: clean(a.title),
+          poster: a.poster || '',
+          url: a.url || '',
+        })
+      )
+        inserted++
+    }
+  }
+  return { source: 'schedule', total, inserted, skipped: total - inserted }
+}
+
+const API_BASE = 'https://www.sankavollerei.web.id'
+
+async function fetchUpstream(path) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      'User-Agent': 'AnimeDongAdmin/1.0',
+      Accept: 'application/json',
+    },
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status} dari ${path}`)
+  const json = await res.json()
+  if (!json?.data) throw new Error('Data tidak ditemukan')
+  return json.data
+}
+
+const stripExternalUrls = (obj) => {
+  if (Array.isArray(obj)) return obj.map(stripExternalUrls)
+  if (obj && typeof obj === 'object') {
+    const out = {}
+    for (const [k, v] of Object.entries(obj)) {
+      if (['otakudesuUrl', 'samehadakuUrl', 'anichinUrl'].includes(k)) continue
+      out[k] = stripExternalUrls(v)
+    }
+    return out
+  }
+  return obj
+}
+
+/** Ambil detail anime dari API upstream (tanpa URL eksternal). */
+export async function fetchAnimeDetail(animeId) {
+  const d = await fetchUpstream(`/anime/anime/${encodeURIComponent(animeId)}`)
+  const data = stripExternalUrls(d)
+  return {
+    anime_id: animeId,
+    title: clean(data.title),
+    poster: data.poster || '',
+    japanese: clean(data.japanese),
+    score: clean(String(data.score ?? '')),
+    producers: clean(data.producers),
+    type: clean(data.type),
+    status: clean(data.status),
+    episodes: data.episodes == null ? '' : String(data.episodes),
+    duration: clean(data.duration),
+    aired: clean(data.aired),
+    studios: clean(data.studios),
+    synopsis: data.synopsis ?? { paragraphs: [], connections: [] },
+    genres: (data.genreList ?? []).map((g) => ({
+      title: clean(g.title),
+      genreId: g.genreId || '',
+    })),
+    episode_list: (data.episodeList ?? []).map((e) => ({
+      title: clean(e.title),
+      eps: e.eps ?? '',
+      date: clean(e.date),
+      episodeId: e.episodeId || '',
+      href: e.href || '',
+    })),
+  }
+}
+
+/** Ambil data episode (daftar server per kualitas). */
+export async function fetchEpisode(episodeId) {
+  return stripExternalUrls(
+    await fetchUpstream(`/anime/episode/${encodeURIComponent(episodeId)}`)
+  )
+}
+
+/** Ambil URL stream dari sebuah serverId. */
+export async function fetchServer(serverId) {
+  const d = await fetchUpstream(`/anime/server/${encodeURIComponent(serverId)}`)
+  return { url: d?.url || '' }
+}

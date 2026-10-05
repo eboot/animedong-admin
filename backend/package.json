@@ -1,0 +1,1 @@
+{"dependencies":{"cors":"^2.8.5","express":"^4.21.2"},"description":"Backend AnimeDong Admin: scrape API anime -> SQLite database 'home'","name":"animedong-admin-backend","scripts":{"dev":"node --watch server.js","start":"node server.js"},"type":"module","version":"1.0.0"}
