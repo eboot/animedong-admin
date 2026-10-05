@@ -262,7 +262,7 @@ export async function fetchServer(serverId) {
 export const DONGHUA_SOURCES = {
   donghua: {
     label: 'Donghua',
-    url: 'https://www.sankavollerei.web.id/anime/donghua/home/1',
+    url: 'https://www.sankavollerei.web.id/anime/donghua/latest/1',
   },
 }
 
@@ -280,30 +280,27 @@ async function fetchDonghuaUpstream(path) {
 }
 
 function normalizeDonghua(json) {
-  const out = []
+  // latest/1 mengembalikan daftar SERIAL (slug serial, bukan per episode).
   // href & anichinUrl TIDAK disimpan — pakai slug sebagai identitas.
-  for (const list of [json?.latest_release, json?.completed_donghua]) {
-    if (!Array.isArray(list)) continue
-    for (const a of list) {
-      if (!a?.slug) continue
-      out.push({
-        source: 'donghua',
-        slug: String(a.slug),
-        title: clean(a.title),
-        poster: a.poster || '',
-        status: clean(a.status),
-        type: clean(a.type),
-        current_episode: clean(a.current_episode),
-      })
-    }
-  }
-  return out
+  const list = json?.latest_donghua
+  if (!Array.isArray(list)) return []
+  return list
+    .filter((a) => a?.slug)
+    .map((a) => ({
+      source: 'donghua',
+      slug: String(a.slug),
+      title: clean(a.title),
+      poster: a.poster || '',
+      status: clean(a.status),
+      type: clean(a.type),
+      current_episode: '',
+    }))
 }
 
 /** Scrape daftar donghua. Simpan ke tabel `donghua`. */
 export async function scrapeDonghua(insertFn) {
   const src = DONGHUA_SOURCES.donghua
-  const json = await fetchDonghuaUpstream('/anime/donghua/home/1')
+  const json = await fetchDonghuaUpstream(new URL(src.url).pathname)
   const items = normalizeDonghua(json)
   let inserted = 0
   for (const item of items) {

@@ -156,14 +156,13 @@ const Donghua = () => {
                   <CTableHeaderCell>Poster</CTableHeaderCell>
                   <CTableHeaderCell>Judul</CTableHeaderCell>
                   <CTableHeaderCell>Status</CTableHeaderCell>
-                  <CTableHeaderCell>Episode</CTableHeaderCell>
                   <CTableHeaderCell>Disimpan</CTableHeaderCell>
                 </CTableRow>
               </CTableHead>
               <CTableBody>
                 {rows.length === 0 && (
                   <CTableRow>
-                    <CTableDataCell colSpan={5} className="text-center text-body-secondary">
+                    <CTableDataCell colSpan={4} className="text-center text-body-secondary">
                       Belum ada data. Pilih sumber API lalu klik Scrape &amp; Simpan.
                     </CTableDataCell>
                   </CTableRow>
@@ -192,7 +191,6 @@ const Donghua = () => {
                         {a.status || '-'}
                       </CBadge>
                     </CTableDataCell>
-                    <CTableDataCell>{a.current_episode || '-'}</CTableDataCell>
                     <CTableDataCell className="text-nowrap">{a.scraped_at}</CTableDataCell>
                   </CTableRow>
                 ))}
