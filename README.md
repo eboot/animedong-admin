@@ -10,7 +10,7 @@ di atas
 
 | Menu      | Isi                                                                          |
 | --------- | ---------------------------------------------------------------------------- |
-| Dashboard | Halaman kosong                                                               |
+| Dashboard | Kartu statistik + grafik anime per sumber & jadwal per hari + scrape terakhir |
 | Anime     | List anime hasil scraping (terbaru dulu) + form scrape; judul link ke detail |
 | Jadwal    | Jadwal rilis anime per hari (Senin..Minggu) + tombol scrape                  |
 | Donghua   | List donghua hasil scraping + form scrape; judul link ke detail              |
@@ -136,6 +136,7 @@ bentrok (`EADDRINUSE`), matikan dulu proses/servis lama yang memakainya
 | GET    | /api/episode/:episodeId   | Data episode + daftar server per kualitas (live)                |
 | GET    | /api/server/:serverId     | URL stream sebuah server — dari db bila tersimpan (`cached: true`), `?fresh=1` paksa live |
 | GET    | /api/stats                | Jumlah data per sumber + waktu scrape terakhir                  |
+| GET    | /api/dashboard            | Ringkasan untuk Dashboard (total, per sumber/hari, scrape terakhir) |
 | GET    | /api/donghua/sources      | Daftar sumber API donghua (untuk dropdown)                      |
 | GET    | /api/donghua              | List donghua, terbaru dulu. Param: `q`, `page`, `limit`         |
 | POST   | /api/donghua/scrape       | Body `{ "source": "donghua" atau URL API }` → scrape & simpan   |

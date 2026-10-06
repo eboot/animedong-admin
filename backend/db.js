@@ -269,6 +269,43 @@ export function stats() {
     .all()
 }
 
+/** Ringkasan angka untuk halaman Dashboard. */
+export function dashboardStats() {
+  const count = (sql) => db.prepare(sql).get()?.c ?? 0
+  return {
+    anime: {
+      total: count('SELECT COUNT(*) AS c FROM home'),
+      details: count('SELECT COUNT(*) AS c FROM anime_detail'),
+      bySource: db
+        .prepare(
+          `SELECT source, COUNT(*) AS total, MAX(scraped_at) AS last_scrape
+           FROM home GROUP BY source ORDER BY total DESC`
+        )
+        .all(),
+    },
+    schedule: {
+      total: count('SELECT COUNT(*) AS c FROM schedule'),
+      byDay: db
+        .prepare('SELECT day, COUNT(*) AS total FROM schedule GROUP BY day')
+        .all(),
+    },
+    donghua: {
+      total: count('SELECT COUNT(*) AS c FROM donghua'),
+      details: count('SELECT COUNT(*) AS c FROM donghua_detail'),
+    },
+    streams: {
+      anime: count('SELECT COUNT(*) AS c FROM stream_cache'),
+      donghua: count('SELECT COUNT(*) AS c FROM donghua_stream'),
+    },
+    recent: db
+      .prepare(
+        `SELECT source, title, episodes, scraped_at
+         FROM home ORDER BY scraped_at DESC LIMIT 8`
+      )
+      .all(),
+  }
+}
+
 // URL stream per serverId — simpan saat pertama diambil, pakai lagi tanpa ke API.
 export function getStreamUrl(serverId) {
   const row = db.prepare('SELECT url FROM stream_cache WHERE server_id = ?').get(serverId)

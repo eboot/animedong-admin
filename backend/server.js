@@ -19,6 +19,7 @@ import {
   getDonghuaStream,
   saveDonghuaStream,
   stats,
+  dashboardStats,
 } from './db.js'
 import {
   SOURCES,
@@ -167,6 +168,11 @@ app.get('/api/server/:serverId', async (req, res) => {
 
 app.get('/api/stats', (req, res) => {
   res.json(stats())
+})
+
+// Ringkasan angka untuk halaman Dashboard
+app.get('/api/dashboard', (req, res) => {
+  res.json({ ok: true, data: dashboardStats() })
 })
 
 // ---- Donghua ----
