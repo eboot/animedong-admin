@@ -17,7 +17,7 @@
     "lint": "eslint",
     "serve": "vite preview",
     "start": "vite",
-    "dev": "concurrently -n web,api -c cyan,magenta \"npm start\" \"npm --prefix backend run dev\"",
+    "dev": "concurrently -n web,api -c cyan,magenta \"npx vite --host\" \"npm --prefix backend run dev\"",
     "prod": "npm run build && node backend/server.js",
     "install:all": "npm install && npm --prefix backend install"
   },

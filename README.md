@@ -59,6 +59,14 @@ terminal (`cd backend && npm run dev` dan `npm start`) kalau mau.
 
 Frontend memanggil backend lewat `VITE_API_URL` (default `http://localhost:3001`).
 
+**Jalan di IP publik / VPS** (mis. Oracle): frontend dev perlu `--host`
+(sudah termasuk di `npm run dev`), dan `VITE_API_URL` di `.env` harus diisi
+IP publik VM — `VITE_API_URL=http://<IP-PUBLIK>:3001` — karena browser di
+laptopmu yang akan memanggil API itu. Buka juga firewall: TCP **3000** dan
+**3001** (Security List di OCI Console + iptables/ufw di VM). Kalau port 3001
+bentrok (`EADDRINUSE`), matikan dulu proses/servis lama yang memakainya
+(`sudo systemctl stop animedong-admin` atau `npx kill-port 3001`).
+
 ## Halaman Anime
 
 - Dropdown **URL API Sumber** berisi:
