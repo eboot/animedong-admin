@@ -304,17 +304,25 @@ export async function fetchServer(serverId) {
   return { url: det?.url || '' }
 }
 
-// ---- Donghua ----
+// ---- Donghua (API baru: 168.110.213.108/donghua) ----
+
+const DONGHUA_API_BASE = 'http://168.110.213.108/donghua'
 
 export const DONGHUA_SOURCES = {
   donghua: {
     label: 'Donghua',
-    url: 'https://www.sankavollerei.web.id/anime/donghua/latest/1',
+    url: `${DONGHUA_API_BASE}/`,
   },
 }
 
+export const DONGHUA_SCHEDULE_SOURCE = {
+  key: 'donghua-schedule',
+  label: 'Jadwal Donghua',
+  url: `${DONGHUA_API_BASE}/schedule`,
+}
+
 async function fetchDonghuaUpstream(path) {
-  const res = await fetch(`${LEGACY_API_BASE}${path}`, {
+  const res = await fetch(`${DONGHUA_API_BASE}${path}`, {
     headers: {
       'User-Agent': 'AnimeDongAdmin/1.0',
       Accept: 'application/json',
@@ -326,84 +334,141 @@ async function fetchDonghuaUpstream(path) {
   return json
 }
 
-function normalizeDonghua(json) {
-  // latest/1 mengembalikan daftar SERIAL (slug serial, bukan per episode).
-  // href & anichinUrl TIDAK disimpan — pakai slug sebagai identitas.
-  const list = json?.latest_donghua
-  if (!Array.isArray(list)) return []
-  return list
-    .filter((a) => a?.slug)
-    .map((a) => ({
-      source: 'donghua',
-      slug: String(a.slug),
-      title: clean(a.title),
-      poster: a.poster || '',
-      status: clean(a.status),
-      type: clean(a.type),
-      current_episode: '',
-    }))
+// Kartu home adalah kartu EPISODE: slug = "{serial}-episode-{n}-subtitle-indonesia".
+// Turunkan slug serial-nya; untuk movie ("{judul}-subtitle-indonesia") pakai
+// fallback potong suffix. URL situs asli (anichin.moe) TIDAK disimpan.
+const EP_SLUG_RE = /^(.*)-episode-\d+-subtitle-indonesia$/
+function seriesSlugFromCard(cardSlug) {
+  const s = String(cardSlug || '')
+  const m = s.match(EP_SLUG_RE)
+  if (m) return m[1]
+  return s.replace(/-subtitle-indonesia?$/, '')
 }
 
-/** Scrape daftar donghua. Simpan ke tabel `donghua`. */
-export async function scrapeDonghua(insertFn) {
-  const src = DONGHUA_SOURCES.donghua
-  const json = await fetchDonghuaUpstream(new URL(src.url).pathname)
-  const items = normalizeDonghua(json)
-  let inserted = 0
-  for (const item of items) {
-    if (!item.title) continue
-    if (insertFn(item)) inserted++
+function normalizeDonghuaCards(json) {
+  const sections = json?.results
+  if (!Array.isArray(sections)) return []
+  const cards = sections
+    .filter((sec) => sec?.section === 'rilisan_terbaru')
+    .flatMap((sec) => sec.cards ?? [])
+  const seen = new Set()
+  const items = []
+  for (const c of cards) {
+    const slug = seriesSlugFromCard(c?.slug)
+    if (!slug || seen.has(slug)) continue
+    seen.add(slug)
+    items.push({
+      source: 'donghua',
+      slug,
+      title: clean(c.title),
+      poster: c.thumbnail || '',
+      status: '',
+      type: clean(c.type),
+      current_episode: c.eps != null ? `Episode ${c.eps}` : '',
+    })
   }
-  return { source: 'donghua', total: items.length, inserted, skipped: items.length - inserted }
+  return items
+}
+
+/**
+ * Scrape daftar donghua dari halaman 1..27 (section rilisan_terbaru).
+ * Berhenti lebih awal bila sebuah halaman tidak mengembalikan kartu.
+ */
+export async function scrapeDonghua(insertFn) {
+  const MAX_PAGE = 27
+  let total = 0
+  let inserted = 0
+  for (let page = 1; page <= MAX_PAGE; page++) {
+    const json = await fetchDonghuaUpstream(`/?page=${page}`)
+    const items = normalizeDonghuaCards(json)
+    if (items.length === 0) break
+    total += items.length
+    for (const item of items) {
+      if (!item.title) continue
+      if (insertFn(item)) inserted++
+    }
+    if (page < MAX_PAGE) await new Promise((r) => setTimeout(r, 300))
+  }
+  return { source: 'donghua', total, inserted, skipped: total - inserted }
 }
 
 /** Ambil detail donghua dari API upstream. */
 export async function fetchDonghuaDetail(slug) {
-  const d = stripExternalUrls(
-    await fetchDonghuaUpstream(`/anime/donghua/detail/${encodeURIComponent(slug)}`)
-  )
+  const json = await fetchDonghuaUpstream(`/${encodeURIComponent(slug)}`)
+  const d = json?.result
+  if (!d) throw new Error('Data tidak ditemukan')
+  const paragraphs = d.sinopsis?.paragraphs
   return {
     slug,
-    title: clean(d.title),
-    poster: d.poster || '',
-    cover: d.cover || '',
+    title: clean(d.name),
+    poster: d.thumbnail || '',
+    cover: '',
     status: clean(d.status),
-    type: clean(d.type),
-    rating: clean(String(d.rating ?? '')),
+    type: clean(d.tipe),
+    rating: d.rating == null ? '' : String(d.rating),
     studio: clean(d.studio),
     network: clean(d.network),
-    released: clean(d.released),
-    duration: clean(d.duration),
-    episodes_count: d.episodes_count == null ? '' : String(d.episodes_count),
+    released: clean(d.tanggal_rilis),
+    duration: clean(d.durasi),
+    episodes_count: Array.isArray(d.episode) ? String(d.episode.length) : '',
     season: clean(d.season),
-    country: clean(d.country),
+    country: clean(d.negara),
     subber: clean(d.subber),
-    genres: (d.genres ?? []).map((g) => ({
-      title: clean(g.name),
-      genreId: g.slug || '',
+    genres: (d.genre ?? []).map((g) => ({
+      title: clean(typeof g === 'string' ? g : g.name),
+      genreId: '',
     })),
-    synopsis: clean(d.synopsis),
-    episodes_list: (d.episodes_list ?? []).map((e) => ({
-      title: clean(e.episode),
-      eps: e.episode_number == null ? '' : String(e.episode_number),
-      date: clean(e.release_date),
+    synopsis: Array.isArray(paragraphs) ? paragraphs.join('\n\n') : clean(d.sinopsis),
+    episodes_list: (d.episode ?? []).map((e) => ({
+      title: clean(e.subtitle || e.name),
+      eps: e.episode == null ? '' : String(e.episode),
+      date: clean(e.date),
       slug: e.slug || '',
     })),
   }
 }
 
-/** Ambil daftar server streaming sebuah episode donghua (URL langsung). */
+/** Ambil daftar server streaming sebuah episode donghua (URL embed langsung). */
 export async function fetchDonghuaEpisode(slug) {
-  const d = stripExternalUrls(
-    await fetchDonghuaUpstream(`/anime/donghua/episode/${encodeURIComponent(slug)}`)
-  )
-  const streaming = d.streaming ?? {}
-  const servers = Array.isArray(streaming.servers) ? streaming.servers : []
+  const json = await fetchDonghuaUpstream(`/episode/${encodeURIComponent(slug)}`)
+  const d = json?.result
+  if (!d) throw new Error('Data tidak ditemukan')
+  const players = Array.isArray(d.players) ? d.players : []
+  const servers = players
+    .filter((p) => p?.url)
+    .map((p) => ({ name: clean(p.name), url: p.url }))
   return {
-    episode: clean(d.episode),
-    main_url: streaming.main_url ?? null,
-    servers: servers
-      .filter((s) => s?.url)
-      .map((s) => ({ name: clean(s.name), url: s.url })),
+    episode: clean(d.name),
+    main_url: servers[0]?.url ?? null,
+    servers,
   }
+}
+
+const DONGHUA_DAY_FIX = { "Jum'at": 'Jumat' }
+
+/** Scrape jadwal donghua Senin..Minggu. Simpan ke tabel `donghua_schedule`. */
+export async function scrapeDonghuaSchedule(insertFn) {
+  const json = await fetchDonghuaUpstream('/schedule')
+  const days = json?.results
+  if (!Array.isArray(days)) throw new Error('Format jadwal tidak dikenal')
+  let total = 0
+  let inserted = 0
+  for (const d of days) {
+    const day = DONGHUA_DAY_FIX[d.day] || d.day
+    for (const it of d.items ?? []) {
+      if (!it?.slug) continue
+      total++
+      // URL situs asli (anichin.moe) TIDAK disimpan — pakai slug sebagai identitas.
+      const item = {
+        day,
+        slug: String(it.slug),
+        title: clean(it.title),
+        poster: it.thumbnail || '',
+        url: '',
+        eps: it.eps != null ? String(it.eps) : '',
+      }
+      if (insertFn(item)) inserted++
+    }
+  }
+  return { source: 'donghua-schedule', total, inserted, skipped: total - inserted }
 }

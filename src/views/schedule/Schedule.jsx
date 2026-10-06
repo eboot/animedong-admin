@@ -21,9 +21,25 @@ import {
 } from '@coreui/react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-const SCHEDULE_URL = 'http://168.110.213.108/otakudesu/schedule'
+const KIND = {
+  anime: {
+    label: 'Anime',
+    sourceUrl: 'http://168.110.213.108/otakudesu/schedule',
+    listPath: '/api/schedule',
+    scrape: { path: '/api/scrape', body: { source: 'schedule' } },
+    detailLink: (a) => `/anime/detail/${a.anime_id}`,
+  },
+  donghua: {
+    label: 'Donghua',
+    sourceUrl: 'http://168.110.213.108/donghua/schedule',
+    listPath: '/api/donghua/schedule',
+    scrape: { path: '/api/donghua/schedule/scrape', body: {} },
+    detailLink: (a) => `/donghua/detail/${a.slug}`,
+  },
+}
 
 const Schedule = () => {
+  const [kind, setKind] = useState('anime')
   const [rows, setRows] = useState([])
   const [total, setTotal] = useState(0)
   const [days, setDays] = useState([])
@@ -34,43 +50,48 @@ const Schedule = () => {
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
 
-  const fetchList = useCallback(async (d = '', q = '') => {
-    setLoading(true)
-    setError('')
-    try {
-      const params = new URLSearchParams({ limit: '200' })
-      if (d) params.set('day', d)
-      if (q) params.set('q', q)
-      const res = await fetch(`${API_BASE}/api/schedule?${params}`)
-      const data = await res.json()
-      setRows(data.rows || [])
-      setTotal(data.total || 0)
-      if (data.days) setDays(data.days)
-    } catch {
-      setError('Gagal memuat data. Pastikan backend jalan di ' + API_BASE)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const cfg = KIND[kind]
+
+  const fetchList = useCallback(
+    async (k = kind, d = '', q = '') => {
+      setLoading(true)
+      setError('')
+      try {
+        const params = new URLSearchParams({ limit: '200' })
+        if (d) params.set('day', d)
+        if (q) params.set('q', q)
+        const res = await fetch(`${API_BASE}${KIND[k].listPath}?${params}`)
+        const data = await res.json()
+        setRows(data.rows || [])
+        setTotal(data.total || 0)
+        if (data.days) setDays(data.days)
+      } catch {
+        setError('Gagal memuat data. Pastikan backend jalan di ' + API_BASE)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [kind]
+  )
 
   useEffect(() => {
-    fetchList()
-  }, [fetchList])
+    fetchList(kind)
+  }, [kind, fetchList])
 
   const handleScrape = async () => {
     setScraping(true)
     setResult(null)
     setError('')
     try {
-      const res = await fetch(`${API_BASE}/api/scrape`, {
+      const res = await fetch(`${API_BASE}${cfg.scrape.path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: 'schedule' }),
+        body: JSON.stringify(cfg.scrape.body),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Scrape gagal')
       setResult(data)
-      fetchList(day, query)
+      fetchList(kind, day, query)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -80,14 +101,24 @@ const Schedule = () => {
 
   return (
     <CCard>
-      <CCardHeader>Jadwal Rilis Anime</CCardHeader>
+      <CCardHeader>Jadwal Rilis {cfg.label}</CCardHeader>
       <CCardBody>
         <CRow className="g-3 mb-3 align-items-end">
           <CCol md={4}>
-            <div>
-              <div className="form-label">URL API Sumber</div>
-              <div className="text-break small text-body-secondary">{SCHEDULE_URL}</div>
-            </div>
+            <CFormSelect
+              label="Jenis"
+              value={kind}
+              onChange={(e) => {
+                setKind(e.target.value)
+                setDay('')
+                setQuery('')
+                setResult(null)
+              }}
+            >
+              <option value="anime">Anime</option>
+              <option value="donghua">Donghua</option>
+            </CFormSelect>
+            <div className="text-break small text-body-secondary mt-2">{cfg.sourceUrl}</div>
           </CCol>
           <CCol md={2}>
             <CButton color="primary" onClick={handleScrape} disabled={scraping}>
@@ -132,7 +163,7 @@ const Schedule = () => {
 
         {result && (
           <CAlert color="success" dismissible onClose={() => setResult(null)}>
-            Scrape <strong>Jadwal</strong> selesai: {result.inserted} data baru disimpan,{' '}
+            Scrape <strong>Jadwal {cfg.label}</strong> selesai: {result.inserted} data baru disimpan,{' '}
             {result.skipped} dilewati (sudah ada) dari {result.total} total.
           </CAlert>
         )}
@@ -187,7 +218,7 @@ const Schedule = () => {
                       )}
                     </CTableDataCell>
                     <CTableDataCell style={{ maxWidth: 340 }}>
-                      <Link to={`/anime/detail/${a.anime_id}`}>{a.title}</Link>
+                      <Link to={cfg.detailLink(a)}>{a.title}</Link>
                     </CTableDataCell>
                     <CTableDataCell className="text-nowrap">{a.scraped_at}</CTableDataCell>
                   </CTableRow>

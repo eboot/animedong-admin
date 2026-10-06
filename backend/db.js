@@ -105,6 +105,19 @@ db.exec(`
     data TEXT NOT NULL,
     fetched_at DATETIME DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS donghua_schedule (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    day TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    title TEXT NOT NULL,
+    poster TEXT,
+    url TEXT,
+    eps TEXT,
+    scraped_at DATETIME DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(day, slug)
+  );
+  CREATE INDEX IF NOT EXISTS idx_donghua_schedule_day ON donghua_schedule(day);
 `)
 
 // Kolom tambahan untuk sumber animehome (dibuat bila belum ada).
@@ -437,4 +450,52 @@ export function saveDonghuaStream(slug, data) {
      VALUES (?, ?, datetime('now', 'localtime'))
      ON CONFLICT(slug) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at`
   ).run(slug, JSON.stringify(data))
+}
+
+// ---- Jadwal donghua ----
+
+const insertDonghuaScheduleStmt = db.prepare(`
+  INSERT OR IGNORE INTO donghua_schedule (day, slug, title, poster, url, eps)
+  VALUES (?, ?, ?, ?, ?, ?)
+`)
+
+/** Insert satu jadwal donghua. Return true jika baris BARU. */
+export function insertDonghuaSchedule(item) {
+  const r = insertDonghuaScheduleStmt.run(
+    item.day,
+    item.slug,
+    item.title,
+    item.poster ?? null,
+    item.url ?? null,
+    item.eps ?? null
+  )
+  return r.changes === 1
+}
+
+const DONGHUA_DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu']
+
+export function listDonghuaSchedule({ day, q, page = 1, limit = 200 } = {}) {
+  const where = []
+  const params = []
+  if (day) {
+    where.push('day = ?')
+    params.push(day)
+  }
+  if (q) {
+    where.push('title LIKE ?')
+    params.push(`%${q}%`)
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const orderCase = `CASE day ${DONGHUA_DAY_ORDER.map((d, i) => `WHEN '${d}' THEN ${i}`).join(' ')} ELSE 99 END`
+  const total = db
+    .prepare(`SELECT COUNT(*) AS c FROM donghua_schedule ${whereSql}`)
+    .get(...params).c
+  const rows = db
+    .prepare(
+      `SELECT * FROM donghua_schedule ${whereSql}
+       ORDER BY ${orderCase}, scraped_at DESC, id DESC
+       LIMIT ? OFFSET ?`
+    )
+    .all(...params, limit, (page - 1) * limit)
+  return { total, page, limit, rows, days: DONGHUA_DAY_ORDER }
 }

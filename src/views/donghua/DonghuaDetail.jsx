@@ -17,7 +17,7 @@ import {
 } from '@coreui/react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-const UPSTREAM = 'https://www.sankavollerei.web.id'
+const UPSTREAM = 'http://168.110.213.108/donghua'
 
 const FIELDS = [
   ['title', 'Judul'],
@@ -330,7 +330,7 @@ const DonghuaDetail = () => {
                     </CButton>
                   </div>
                   <div className="small text-body-secondary mt-2">
-                    Sumber API: {UPSTREAM}/anime/donghua/detail/{slug}
+                    Sumber API: {UPSTREAM}/{slug}
                   </div>
                 </CCol>
               </CRow>
