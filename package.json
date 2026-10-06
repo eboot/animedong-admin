@@ -17,6 +17,7 @@
     "lint": "eslint",
     "serve": "vite preview",
     "start": "vite",
+    "dev": "concurrently -n web,api -c cyan,magenta \"npm start\" \"npm --prefix backend run dev\"",
     "prod": "npm run build && node backend/server.js",
     "install:all": "npm install && npm --prefix backend install"
   },
@@ -43,6 +44,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.6.1",
+    "concurrently": "^9.2.1",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.6",
