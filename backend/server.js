@@ -135,10 +135,13 @@ app.put('/api/anime/:animeId', (req, res) => {
   res.json({ ok: true, data: getAnimeDetail(animeId) })
 })
 
-// Data episode (daftar server per kualitas) — live dari API
+// Data episode (daftar server per kualitas) — live dari API.
+// defaultStreamingUrl ikut disimpan ke stream_cache.
 app.get('/api/episode/:episodeId', async (req, res) => {
   try {
     const data = await fetchEpisode(req.params.episodeId)
+    if (data?.defaultStreamingUrl)
+      saveStreamUrl(`episode:${req.params.episodeId}`, data.defaultStreamingUrl)
     res.json({ ok: true, data })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })

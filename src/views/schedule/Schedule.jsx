@@ -21,7 +21,7 @@ import {
 } from '@coreui/react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-const SCHEDULE_URL = 'https://www.sankavollerei.web.id/anime/schedule'
+const SCHEDULE_URL = 'http://168.110.213.108/otakudesu/schedule'
 
 const Schedule = () => {
   const [rows, setRows] = useState([])

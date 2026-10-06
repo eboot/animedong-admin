@@ -70,7 +70,7 @@ bentrok (`EADDRINUSE`), matikan dulu proses/servis lama yang memakainya
 ## Halaman Anime
 
 - Dropdown **URL API Sumber** berisi:
-  - Otaku — `https://www.sankavollerei.web.id/anime/home`
+  - Otaku — `http://168.110.213.108/otakudesu/home`
   - Samehadaku — `https://www.sankavollerei.web.id/anime/samehadaku/home`
   - Anoboy — `https://www.sankavollerei.web.id/anime/anoboy/home?page=1`
   - Animeindo — `https://www.sankavollerei.web.id/anime/stream/latest`
@@ -84,21 +84,21 @@ bentrok (`EADDRINUSE`), matikan dulu proses/servis lama yang memakainya
 ## Halaman Jadwal
 
 - Seperti halaman Anime, khusus jadwal rilisan: tombol **Scrape & Simpan**
-  mengambil `https://www.sankavollerei.web.id/anime/schedule`.
+  mengambil `http://168.110.213.108/otakudesu/schedule`.
 - Filter hari (Senin..Minggu) + pencarian judul; tabel urut hari.
 - Judul juga link ke halaman detail anime.
 
 ## Halaman Detail Anime (`/anime/detail/{anime_id}`)
 
 - Buka data dari **database** bila sudah disimpan; bila belum, **ambil live**
-  dari `https://www.sankavollerei.web.id/anime/anime/{anime_id}`.
+  dari `http://168.110.213.108/otakudesu/anime/{anime_id}`.
 - Tombol **Ambil Ulang dari API** untuk refresh paksa dari API.
 - **Form edit**: judul, poster, judul Jepang, skor, produser, tipe, status,
   episode, durasi, tayang, studio, genre, sinopsis → **Simpan ke Database**.
 - **Daftar episode** dari `episodeId`: tiap episode ada tombol **Stream**
-  (buka `https://www.sankavollerei.web.id/anime/episode/{episodeId}`) dan
+  (buka `http://168.110.213.108/otakudesu/episode/{episodeId}`) dan
   tombol **Lihat Server** → daftar server per kualitas → klik server untuk
-  melihat URL stream dari `https://www.sankavollerei.web.id/anime/server/{serverId}`.
+  melihat URL stream dari `http://168.110.213.108/otakudesu/server/{serverId}`.
 - **Cache URL stream**: URL stream tiap server disimpan di database saat
   pertama diambil (`stream_cache`); kunjungan berikutnya disajikan dari
   database (badge "tersimpan di database"), dengan link **Ambil ulang dari

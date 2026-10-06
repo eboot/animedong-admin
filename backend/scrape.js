@@ -9,7 +9,7 @@
 export const SOURCES = {
   animehome: {
     label: 'Otaku',
-    url: 'https://www.sankavollerei.web.id/anime/home',
+    url: 'http://168.110.213.108/otakudesu/home',
   },
   samehadaku: {
     label: 'Samehadaku',
@@ -28,7 +28,7 @@ export const SOURCES = {
 export const SCHEDULE_SOURCE = {
   key: 'schedule',
   label: 'Jadwal',
-  url: 'https://www.sankavollerei.web.id/anime/schedule',
+  url: 'http://168.110.213.108/otakudesu/schedule',
 }
 
 const clean = (s) =>
@@ -158,21 +158,22 @@ export async function scrapeSchedule(insertFn) {
   })
   if (!res.ok) throw new Error(`HTTP ${res.status} dari ${SCHEDULE_SOURCE.url}`)
   const json = await res.json()
-  const days = json?.data
+  const days = json?.data?.scheduleList ?? json?.data
   if (!Array.isArray(days)) throw new Error('Format jadwal tidak dikenali')
   let total = 0
   let inserted = 0
   for (const d of days) {
-    const list = d?.anime_list
+    const list = d?.animeList ?? d?.anime_list
     if (!Array.isArray(list)) continue
     for (const a of list) {
-      if (!a?.slug) continue
+      const slug = a?.animeId ?? a?.slug
+      if (!slug) continue
       total++
-      // field "url" di sini path internal API (/anime/anime/...) — disimpan.
+      // Format baru: tanpa poster/url; otakudesuUrl TIDAK disimpan (URL eksternal).
       if (
         insertFn({
-          day: clean(d.day),
-          anime_id: String(a.slug),
+          day: clean(d.title ?? d.day),
+          anime_id: String(slug),
           title: clean(a.title),
           poster: a.poster || '',
           url: a.url || '',
@@ -184,7 +185,8 @@ export async function scrapeSchedule(insertFn) {
   return { source: 'schedule', total, inserted, skipped: total - inserted }
 }
 
-const API_BASE = 'https://www.sankavollerei.web.id'
+const API_BASE = 'http://168.110.213.108'
+const LEGACY_API_BASE = 'https://www.sankavollerei.web.id'
 
 async function fetchUpstream(path) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -214,8 +216,12 @@ const stripExternalUrls = (obj) => {
 
 /** Ambil detail anime dari API upstream (tanpa URL eksternal). */
 export async function fetchAnimeDetail(animeId) {
-  const d = await fetchUpstream(`/anime/anime/${encodeURIComponent(animeId)}`)
-  const data = stripExternalUrls(d)
+  const raw = await fetchUpstream(`/otakudesu/anime/${encodeURIComponent(animeId)}`)
+  const data = stripExternalUrls(raw.details ?? raw)
+  const syn = data.synopsis ?? {}
+  const synopsis = Array.isArray(syn.paragraphs)
+    ? syn
+    : { paragraphs: syn.paragraphList ?? [], connections: [] }
   return {
     anime_id: animeId,
     title: clean(data.title),
@@ -229,7 +235,7 @@ export async function fetchAnimeDetail(animeId) {
     duration: clean(data.duration),
     aired: clean(data.aired),
     studios: clean(data.studios),
-    synopsis: data.synopsis ?? { paragraphs: [], connections: [] },
+    synopsis,
     genres: (data.genreList ?? []).map((g) => ({
       title: clean(g.title),
       genreId: g.genreId || '',
@@ -244,17 +250,26 @@ export async function fetchAnimeDetail(animeId) {
   }
 }
 
-/** Ambil data episode (daftar server per kualitas). */
+/** Ambil data episode (daftar server per kualitas + defaultStreamingUrl). */
 export async function fetchEpisode(episodeId) {
-  return stripExternalUrls(
-    await fetchUpstream(`/anime/episode/${encodeURIComponent(episodeId)}`)
-  )
+  const raw = await fetchUpstream(`/otakudesu/episode/${encodeURIComponent(episodeId)}`)
+  const d = stripExternalUrls(raw.details ?? raw)
+  const server = d.server ?? {}
+  return {
+    ...d,
+    defaultStreamingUrl: d.defaultStreamingUrl || '',
+    server: {
+      ...server,
+      qualities: server.qualities ?? server.qualityList ?? [],
+    },
+  }
 }
 
 /** Ambil URL stream dari sebuah serverId. */
 export async function fetchServer(serverId) {
-  const d = await fetchUpstream(`/anime/server/${encodeURIComponent(serverId)}`)
-  return { url: d?.url || '' }
+  const d = await fetchUpstream(`/otakudesu/server/${encodeURIComponent(serverId)}`)
+  const det = d.details ?? d
+  return { url: det?.url || '' }
 }
 
 // ---- Donghua ----
@@ -267,7 +282,7 @@ export const DONGHUA_SOURCES = {
 }
 
 async function fetchDonghuaUpstream(path) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${LEGACY_API_BASE}${path}`, {
     headers: {
       'User-Agent': 'AnimeDongAdmin/1.0',
       Accept: 'application/json',

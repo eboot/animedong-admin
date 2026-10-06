@@ -17,7 +17,7 @@ import {
 } from '@coreui/react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-const UPSTREAM = 'https://www.sankavollerei.web.id'
+const UPSTREAM = 'http://168.110.213.108'
 
 const FIELDS = [
   ['title', 'Judul'],
@@ -352,7 +352,7 @@ const AnimeDetail = () => {
                     </CButton>
                   </div>
                   <div className="small text-body-secondary mt-2">
-                    Sumber API: {UPSTREAM}/anime/anime/{animeId}
+                    Sumber API: {UPSTREAM}/otakudesu/anime/{animeId}
                   </div>
                 </CCol>
               </CRow>
@@ -377,7 +377,7 @@ const AnimeDetail = () => {
                       <div className="small text-body-secondary">{ep.date}</div>
                     </div>
                     <a
-                      href={`${UPSTREAM}/anime/episode/${ep.episodeId}`}
+                      href={`${UPSTREAM}/otakudesu/episode/${ep.episodeId}`}
                       target="_blank"
                       rel="noreferrer"
                       className="btn btn-sm btn-outline-primary"
