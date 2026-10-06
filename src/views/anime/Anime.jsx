@@ -10,6 +10,8 @@ import {
   CCol,
   CFormInput,
   CFormSelect,
+  CPagination,
+  CPaginationItem,
   CRow,
   CSpinner,
   CTable,
@@ -27,7 +29,10 @@ const SOURCE_COLORS = {
   samehadaku: 'info',
   anoboy: 'warning',
   animeindo: 'success',
+  animebrowse: 'danger',
 }
+
+const PAGE_SIZE = 20
 
 const Anime = () => {
   const [sources, setSources] = useState([])
@@ -35,21 +40,26 @@ const Anime = () => {
   const [rows, setRows] = useState([])
   const [total, setTotal] = useState(0)
   const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const [scraping, setScraping] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
 
-  const fetchList = useCallback(async (q = '') => {
+  const fetchList = useCallback(async (q = '', p = 1) => {
     setLoading(true)
     setError('')
     try {
-      const params = new URLSearchParams({ limit: '100' })
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        page: String(p),
+      })
       if (q) params.set('q', q)
       const res = await fetch(`${API_BASE}/api/home?${params}`)
       const data = await res.json()
       setRows(data.rows || [])
       setTotal(data.total || 0)
+      setPage(data.page || p)
     } catch {
       setError('Gagal memuat data. Pastikan backend jalan di ' + API_BASE)
     } finally {
@@ -79,7 +89,7 @@ const Anime = () => {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Scrape gagal')
       setResult(data)
-      fetchList(query)
+      fetchList(query, 1)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -127,7 +137,7 @@ const Anime = () => {
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value)
-                fetchList(e.target.value)
+                fetchList(e.target.value, 1)
               }}
             />
           </CCol>
@@ -208,9 +218,57 @@ const Anime = () => {
             </CTable>
           </div>
         )}
+
+        {total > PAGE_SIZE && (
+          <CPagination className="justify-content-center mt-3 mb-0" aria-label="Navigasi halaman">
+            <CPaginationItem
+              disabled={page <= 1}
+              onClick={() => fetchList(query, page - 1)}
+            >
+              ‹
+            </CPaginationItem>
+            {pageNumbers(page, Math.ceil(total / PAGE_SIZE)).map((p, i) =>
+              p === '…' ? (
+                <CPaginationItem key={`ellipsis-${i}`} disabled>
+                  …
+                </CPaginationItem>
+              ) : (
+                <CPaginationItem
+                  key={p}
+                  active={p === page}
+                  onClick={() => fetchList(query, p)}
+                >
+                  {p}
+                </CPaginationItem>
+              ),
+            )}
+            <CPaginationItem
+              disabled={page >= Math.ceil(total / PAGE_SIZE)}
+              onClick={() => fetchList(query, page + 1)}
+            >
+              ›
+            </CPaginationItem>
+          </CPagination>
+        )}
       </CCardBody>
     </CCard>
   )
+}
+
+// Nomor halaman kompak: 1 … [p-1, p, p+1] … total
+const pageNumbers = (page, totalPages) => {
+  if (totalPages <= 7)
+    return Array.from({ length: totalPages }, (_, i) => i + 1)
+  const pages = new Set([1, totalPages, page - 1, page, page + 1])
+  const sorted = [...pages].filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b)
+  const out = []
+  let prev = 0
+  for (const p of sorted) {
+    if (p - prev > 1) out.push('…')
+    out.push(p)
+    prev = p
+  }
+  return out
 }
 
 export default Anime

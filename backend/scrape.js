@@ -23,6 +23,10 @@ export const SOURCES = {
     label: 'Animeindo',
     url: 'https://www.sankavollerei.web.id/anime/stream/latest',
   },
+  animebrowse: {
+    label: 'Browse',
+    url: 'http://168.110.213.108/otakudesu/anime',
+  },
 }
 
 export const SCHEDULE_SOURCE = {
@@ -121,11 +125,39 @@ function normalizeAnimeHome(json) {
   return out
 }
 
+function normalizeAnimeBrowse(json) {
+  // /otakudesu/anime: data.list = grup alfabet [{startWith, animeList}].
+  const out = []
+  const groups = json?.data?.list
+  if (!Array.isArray(groups)) return out
+  for (const g of groups) {
+    const list = g?.animeList
+    if (!Array.isArray(list)) continue
+    for (const a of list) {
+      if (!a?.animeId) continue
+      out.push({
+        source: 'animebrowse',
+        anime_id: String(a.animeId),
+        title: clean(a.title),
+        poster: '',
+        episodes: '',
+        released_on: '',
+        release_day: '',
+        type: '',
+        href: '',
+        // otakudesuUrl TIDAK disimpan.
+      })
+    }
+  }
+  return out
+}
+
 const NORMALIZERS = {
   animehome: normalizeAnimeHome,
   samehadaku: normalizeSamehadaku,
   anoboy: normalizeAnoboy,
   animeindo: normalizeAnimeindo,
+  animebrowse: normalizeAnimeBrowse,
 }
 
 export async function scrapeSource(key, insertFn) {
