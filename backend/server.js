@@ -223,6 +223,30 @@ app.post('/api/donghua/scrape', async (req, res) => {
   }
 })
 
+// List jadwal donghua yang sudah di-scrape, urut hari Senin..Minggu.
+// (Didefinisikan SEBELUM /:slug agar tidak tertelan parameter slug.)
+app.get('/api/donghua/schedule', (req, res) => {
+  const { day, q, page, limit } = req.query
+  res.json(
+    listDonghuaSchedule({
+      day: day || undefined,
+      q: q || undefined,
+      page: Math.max(1, parseInt(page) || 1),
+      limit: Math.min(500, Math.max(1, parseInt(limit) || 200)),
+    })
+  )
+})
+
+// Scrape + simpan jadwal donghua ke database (duplikat dilewati)
+app.post('/api/donghua/schedule/scrape', async (req, res) => {
+  try {
+    const result = await scrapeDonghuaSchedule(insertDonghuaSchedule)
+    res.json({ ok: true, ...result, url: DONGHUA_SCHEDULE_SOURCE.url })
+  } catch (e) {
+    res.status(502).json({ ok: false, error: e.message })
+  }
+})
+
 // Detail donghua: dari database bila ada, bila belum — ambil live dari API.
 // Param ?fresh=1 memaksa ambil live walau sudah ada di database.
 app.get('/api/donghua/:slug', async (req, res) => {
@@ -260,29 +284,6 @@ app.get('/api/donghua/episode/:slug', async (req, res) => {
     const data = await fetchDonghuaEpisode(slug)
     saveDonghuaStream(slug, data)
     res.json({ ok: true, data, cached: false })
-  } catch (e) {
-    res.status(502).json({ ok: false, error: e.message })
-  }
-})
-
-// List jadwal donghua yang sudah di-scrape, urut hari Senin..Minggu
-app.get('/api/donghua/schedule', (req, res) => {
-  const { day, q, page, limit } = req.query
-  res.json(
-    listDonghuaSchedule({
-      day: day || undefined,
-      q: q || undefined,
-      page: Math.max(1, parseInt(page) || 1),
-      limit: Math.min(500, Math.max(1, parseInt(limit) || 200)),
-    })
-  )
-})
-
-// Scrape + simpan jadwal donghua ke database (duplikat dilewati)
-app.post('/api/donghua/schedule/scrape', async (req, res) => {
-  try {
-    const result = await scrapeDonghuaSchedule(insertDonghuaSchedule)
-    res.json({ ok: true, ...result, url: DONGHUA_SCHEDULE_SOURCE.url })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
   }

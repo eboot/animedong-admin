@@ -21,9 +21,9 @@ import {
 } from '@coreui/react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-const SCHEDULE_URL = 'http://168.110.213.108/otakudesu/schedule'
+const SCHEDULE_URL = 'http://168.110.213.108/donghua/schedule'
 
-const Schedule = () => {
+const DonghuaSchedule = () => {
   const [rows, setRows] = useState([])
   const [total, setTotal] = useState(0)
   const [days, setDays] = useState([])
@@ -41,7 +41,7 @@ const Schedule = () => {
       const params = new URLSearchParams({ limit: '200' })
       if (d) params.set('day', d)
       if (q) params.set('q', q)
-      const res = await fetch(`${API_BASE}/api/schedule?${params}`)
+      const res = await fetch(`${API_BASE}/api/donghua/schedule?${params}`)
       const data = await res.json()
       setRows(data.rows || [])
       setTotal(data.total || 0)
@@ -62,10 +62,9 @@ const Schedule = () => {
     setResult(null)
     setError('')
     try {
-      const res = await fetch(`${API_BASE}/api/scrape`, {
+      const res = await fetch(`${API_BASE}/api/donghua/schedule/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: 'schedule' }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Scrape gagal')
@@ -80,7 +79,7 @@ const Schedule = () => {
 
   return (
     <CCard>
-      <CCardHeader>Jadwal Rilis Anime</CCardHeader>
+      <CCardHeader>Jadwal Rilis Donghua</CCardHeader>
       <CCardBody>
         <CRow className="g-3 mb-3 align-items-end">
           <CCol md={4}>
@@ -132,8 +131,8 @@ const Schedule = () => {
 
         {result && (
           <CAlert color="success" dismissible onClose={() => setResult(null)}>
-            Scrape <strong>Jadwal</strong> selesai: {result.inserted} data baru disimpan,{' '}
-            {result.skipped} dilewati (sudah ada) dari {result.total} total.
+            Scrape <strong>Jadwal Donghua</strong> selesai: {result.inserted} data baru
+            disimpan, {result.skipped} dilewati (sudah ada) dari {result.total} total.
           </CAlert>
         )}
         {error && (
@@ -156,13 +155,14 @@ const Schedule = () => {
                   <CTableHeaderCell>Hari</CTableHeaderCell>
                   <CTableHeaderCell>Poster</CTableHeaderCell>
                   <CTableHeaderCell>Judul</CTableHeaderCell>
+                  <CTableHeaderCell>Episode</CTableHeaderCell>
                   <CTableHeaderCell>Disimpan</CTableHeaderCell>
                 </CTableRow>
               </CTableHead>
               <CTableBody>
                 {rows.length === 0 && (
                   <CTableRow>
-                    <CTableDataCell colSpan={4} className="text-center text-body-secondary">
+                    <CTableDataCell colSpan={5} className="text-center text-body-secondary">
                       Belum ada data. Klik Scrape &amp; Simpan.
                     </CTableDataCell>
                   </CTableRow>
@@ -187,7 +187,10 @@ const Schedule = () => {
                       )}
                     </CTableDataCell>
                     <CTableDataCell style={{ maxWidth: 340 }}>
-                      <Link to={`/anime/detail/${a.anime_id}`}>{a.title}</Link>
+                      <Link to={`/donghua/detail/${a.slug}`}>{a.title}</Link>
+                    </CTableDataCell>
+                    <CTableDataCell>
+                      {a.eps ? <CBadge color="primary">Ep {a.eps}</CBadge> : '-'}
                     </CTableDataCell>
                     <CTableDataCell className="text-nowrap">{a.scraped_at}</CTableDataCell>
                   </CTableRow>
@@ -201,4 +204,4 @@ const Schedule = () => {
   )
 }
 
-export default Schedule
+export default DonghuaSchedule

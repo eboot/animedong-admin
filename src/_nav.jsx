@@ -28,6 +28,12 @@ const _nav = [
     to: '/donghua',
     icon: <CIcon icon={cilTv} customClassName="nav-icon" />,
   },
+  {
+    component: CNavItem,
+    name: 'Jadwal Donghua',
+    to: '/donghua/jadwal',
+    icon: <CIcon icon={cilCalendar} customClassName="nav-icon" />,
+  },
 ]
 
 export default _nav
