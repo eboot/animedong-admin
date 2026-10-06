@@ -171,8 +171,17 @@ export function listSchedule({ day, q, page = 1, limit = 100 } = {}) {
     .get(...params).c
   const rows = db
     .prepare(
-      `SELECT * FROM schedule ${whereSql}
-       ORDER BY ${orderCase}, scraped_at DESC, id DESC
+      `SELECT s.id, s.day, s.anime_id, s.title,
+         COALESCE(
+           NULLIF(s.poster, ''),
+           (SELECT h.poster FROM home h
+            WHERE h.anime_id = s.anime_id AND h.poster <> ''
+            ORDER BY h.scraped_at DESC, h.id DESC LIMIT 1),
+           ''
+         ) AS poster,
+         s.url, s.scraped_at
+       FROM schedule s ${whereSql}
+       ORDER BY ${orderCase}, s.scraped_at DESC, s.id DESC
        LIMIT ? OFFSET ?`
     )
     .all(...params, limit, (page - 1) * limit)
