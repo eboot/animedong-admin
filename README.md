@@ -71,9 +71,8 @@ bentrok (`EADDRINUSE`), matikan dulu proses/servis lama yang memakainya
 
 - Dropdown **URL API Sumber** berisi:
   - Otaku — `http://168.110.213.108/otakudesu/home`
-  - Samehadaku — `https://www.sankavollerei.web.id/anime/samehadaku/home`
-  - Anoboy — `https://www.sankavollerei.web.id/anime/anoboy/home?page=1`
-  - Animeindo — `https://www.sankavollerei.web.id/anime/stream/latest`
+  - Browse — `http://168.110.213.108/otakudesu/anime`
+  - Jadwal — `http://168.110.213.108/otakudesu/schedule`
 - Tombol **Scrape & Simpan**: ambil data dari API terpilih, simpan ke database
   `home`. Data yang **sudah ada dilewati** (unik per `source` + `anime_id`).
 - Tabel urut dari yang **terbaru di-scrape**, plus kolom pencarian judul.
@@ -116,7 +115,7 @@ bentrok (`EADDRINUSE`), matikan dulu proses/servis lama yang memakainya
 ## Halaman Donghua (`/donghua`, `/donghua/:slug`)
 
 - Dropdown sumber: Donghua —
-  `https://www.sankavollerei.web.id/anime/donghua/latest/1`
+  `http://168.110.213.108/donghua/?page={1..27}`
   (mengembalikan slug serial, bukan per episode).
 - Tombol **Scrape & Simpan**: simpan ke tabel `donghua`; data yang **sudah
   ada dilewati** (unik per `source` + `slug`).

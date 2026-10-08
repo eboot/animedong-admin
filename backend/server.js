@@ -96,7 +96,7 @@ app.post('/api/scrape', async (req, res) => {
       : Object.keys(SOURCES).find((k) => SOURCES[k].url === source)
   if (!key) {
     return res.status(400).json({
-      error: 'Pilih sumber dulu: animehome | samehadaku | anoboy | animeindo | schedule',
+      error: 'Pilih sumber dulu: animehome | animebrowse | schedule',
     })
   }
   try {

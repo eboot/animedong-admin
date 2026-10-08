@@ -1,5 +1,5 @@
 /**
- * Scraper: ambil data dari API sankavollerei, normalisasi,
+ * Scraper: ambil data dari API 168.110.213.108/otakudesu, normalisasi,
  * simpan ke database "home". Duplikat (source + anime_id) dilewati.
  *
  * Field URL eksternal (samehadakuUrl / otakudesuUrl / url situs)
@@ -10,18 +10,6 @@ export const SOURCES = {
   animehome: {
     label: 'Otaku',
     url: 'http://168.110.213.108/otakudesu/home',
-  },
-  samehadaku: {
-    label: 'Samehadaku',
-    url: 'https://www.sankavollerei.web.id/anime/samehadaku/home',
-  },
-  anoboy: {
-    label: 'Anoboy',
-    url: 'https://www.sankavollerei.web.id/anime/anoboy/home?page=1',
-  },
-  animeindo: {
-    label: 'Animeindo',
-    url: 'https://www.sankavollerei.web.id/anime/stream/latest',
   },
   animebrowse: {
     label: 'Browse',
@@ -37,66 +25,6 @@ export const SCHEDULE_SOURCE = {
 
 const clean = (s) =>
   typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : ''
-
-function normalizeSamehadaku(json) {
-  const out = []
-  const data = json?.data ?? {}
-  // Kumpulkan semua animeList dari tiap section (recent, dll).
-  for (const section of Object.values(data)) {
-    const list = section?.animeList
-    if (!Array.isArray(list)) continue
-    for (const a of list) {
-      if (!a?.animeId) continue
-      out.push({
-        source: 'samehadaku',
-        anime_id: String(a.animeId),
-        title: clean(a.title),
-        poster: a.poster || '',
-        episodes: clean(a.episodes),
-        released_on: clean(a.releasedOn),
-        type: '',
-        href: a.href || '',
-        // samehadakuUrl & otakudesuUrl TIDAK disimpan.
-      })
-    }
-  }
-  return out
-}
-
-function normalizeAnoboy(json) {
-  const list = json?.anime_list
-  if (!Array.isArray(list)) return []
-  return list
-    .filter((a) => a?.slug)
-    .map((a) => ({
-      source: 'anoboy',
-      anime_id: String(a.slug),
-      title: clean(a.title),
-      poster: a.poster || '',
-      episodes: clean(a.episode),
-      released_on: '',
-      type: clean(a.type),
-      href: '',
-      // field "url" (link situs anoboy) TIDAK disimpan.
-    }))
-}
-
-function normalizeAnimeindo(json) {
-  const list = json?.data
-  if (!Array.isArray(list)) return []
-  return list
-    .filter((a) => a?.slug)
-    .map((a) => ({
-      source: 'animeindo',
-      anime_id: String(a.slug),
-      title: clean(a.title),
-      poster: a.poster || '',
-      episodes: clean(a.episode) ? `Ep ${clean(a.episode)}` : '',
-      released_on: '',
-      type: '',
-      href: '',
-    }))
-}
 
 function normalizeAnimeHome(json) {
   const out = []
@@ -154,9 +82,6 @@ function normalizeAnimeBrowse(json) {
 
 const NORMALIZERS = {
   animehome: normalizeAnimeHome,
-  samehadaku: normalizeSamehadaku,
-  anoboy: normalizeAnoboy,
-  animeindo: normalizeAnimeindo,
   animebrowse: normalizeAnimeBrowse,
 }
 
@@ -218,7 +143,6 @@ export async function scrapeSchedule(insertFn) {
 }
 
 const API_BASE = 'http://168.110.213.108'
-const LEGACY_API_BASE = 'https://www.sankavollerei.web.id'
 
 async function fetchUpstream(path) {
   const res = await fetch(`${API_BASE}${path}`, {
