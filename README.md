@@ -88,6 +88,15 @@ bentrok (`EADDRINUSE`), matikan dulu proses/servis lama yang memakainya
 - Filter hari (Senin..Minggu) + pencarian judul; tabel urut hari.
 - Judul juga link ke halaman detail anime.
 
+## Auto-refresh Jadwal (scheduler)
+
+- Backend menjalankan `backend/scheduler.js` otomatis saat start:
+  scrape **jadwal anime** + **jadwal donghua** tiap hari jam **01:00 dan
+  13:00 WITA** (`Asia/Makassar`), tanpa perlu pencet tombol manual.
+- Status & riwayat: `GET /api/scheduler/status`.
+- Trigger manual: `POST /api/scheduler/run` (melewati jadwal, tetap
+  anti-bentrok bila ada job yang sedang jalan).
+
 ## Halaman Detail Anime (`/anime/detail/{anime_id}`)
 
 - Buka data dari **database** bila sudah disimpan; bila belum, **ambil live**

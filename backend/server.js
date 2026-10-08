@@ -38,6 +38,11 @@ import {
   fetchDonghuaDetail,
   fetchDonghuaEpisode,
 } from './scrape.js'
+import {
+  startScheduler,
+  getSchedulerStatus,
+  runAllSchedulesNow,
+} from './scheduler.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -174,6 +179,19 @@ app.get('/api/stats', (req, res) => {
   res.json(stats())
 })
 
+// Status + trigger manual auto-refresh jadwal (scheduler)
+app.get('/api/scheduler/status', (req, res) => {
+  res.json({ ok: true, data: getSchedulerStatus() })
+})
+app.post('/api/scheduler/run', async (req, res) => {
+  try {
+    const result = await runAllSchedulesNow()
+    res.json({ ok: true, data: result })
+  } catch (e) {
+    res.status(502).json({ ok: false, error: e.message })
+  }
+})
+
 // Ringkasan angka untuk halaman Dashboard
 app.get('/api/dashboard', (req, res) => {
   res.json({ ok: true, data: dashboardStats() })
@@ -303,4 +321,5 @@ if (existsSync(dist)) {
 
 app.listen(PORT, () => {
   console.log(`AnimeDong Admin API jalan di http://localhost:${PORT}`)
+  startScheduler()
 })
