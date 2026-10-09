@@ -96,6 +96,25 @@ bentrok (`EADDRINUSE`), matikan dulu proses/servis lama yang memakainya
 - Trigger manual: `POST /api/scheduler/run` (melewati jadwal, tetap
   anti-bentrok bila ada job yang sedang jalan).
 
+## Integrasi Supabase (contoh, opsional)
+
+Backend default pakai SQLite lokal (`backend/data/home.sqlite`). Kalau mau
+pindah ke Supabase (PostgreSQL) + tetap pakai Firebase buat FCM:
+
+1. Buat project di https://supabase.com/dashboard, buka **SQL Editor**,
+   paste isi `backend/supabase-schema.sql`, Run.
+2. Ambil **URL** dan **service key** dari Project Settings -> API.
+3. Di server, set env:
+   ```
+   SUPABASE_URL=https://xxxx.supabase.co
+   SUPABASE_SERVICE_KEY=eyJh...
+   ```
+4. `cd backend && npm install` (sudah termasuk `@supabase/supabase-js`).
+5. Tes: `node supabase-test.js` (insert + baca + bersih-bersih baris test).
+6. Untuk pakai beneran, ganti import di `server.js`/`scheduler.js`:
+   `from './db.js'` -> `from './supabase.js'`, dan tambahkan `await`
+   di pemanggilnya (fungsi Supabase semuanya async).
+
 ## Halaman Detail Anime (`/anime/detail/{anime_id}`)
 
 - Buka data dari **database** bila sudah disimpan; bila belum, **ambil live**
