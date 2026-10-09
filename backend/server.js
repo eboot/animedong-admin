@@ -14,6 +14,8 @@ import {
   saveAnimeDetail,
   getStreamUrl,
   saveStreamUrl,
+  getEpisodeCache,
+  saveEpisodeCache,
   insertDonghua,
   listDonghua,
   getDonghuaDetail,
@@ -154,14 +156,16 @@ app.put('/api/anime/:animeId', ah(async (req, res) => {
 // Data episode (daftar server per kualitas) — live dari API.
 // defaultStreamingUrl ikut disimpan ke stream_cache.
 app.get('/api/episode/:episodeId', ah(async (req, res) => {
-  try {
-    const data = await fetchEpisode(req.params.episodeId)
-    if (data?.defaultStreamingUrl)
-      await saveStreamUrl(`episode:${req.params.episodeId}`, data.defaultStreamingUrl)
-    res.json({ ok: true, data })
-  } catch (e) {
-    res.status(502).json({ ok: false, error: e.message })
+  const { episodeId } = req.params
+  if (!req.query.fresh) {
+    const cached = await getEpisodeCache(episodeId)
+    if (cached) return res.json({ ok: true, data: cached, cached: true })
   }
+  const data = await fetchEpisode(episodeId)
+  if (data?.defaultStreamingUrl)
+    await saveStreamUrl(`episode:${episodeId}`, data.defaultStreamingUrl)
+  await saveEpisodeCache(episodeId, data) // langsung masuk database
+  res.json({ ok: true, data, cached: false })
 }))
 
 // URL stream dari sebuah serverId — dari database bila sudah tersimpan,

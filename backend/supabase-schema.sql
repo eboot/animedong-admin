@@ -114,3 +114,11 @@ CREATE TABLE IF NOT EXISTS donghua_schedule (
   UNIQUE (day, slug)
 );
 CREATE INDEX IF NOT EXISTS idx_donghua_schedule_day ON donghua_schedule (day);
+
+-- Cache data episode (daftar server per kualitas dari /otakudesu/episode/{id}).
+-- Ditulis otomatis saat dashboard membuka halaman episode.
+CREATE TABLE IF NOT EXISTS episode_cache (
+  episode_id TEXT PRIMARY KEY,
+  data TEXT NOT NULL,
+  fetched_at TIMESTAMPTZ DEFAULT NOW()
+);

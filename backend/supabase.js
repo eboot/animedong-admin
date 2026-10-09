@@ -371,3 +371,23 @@ export async function dashboardStats() {
     recent: recent ?? [],
   }
 }
+
+/** Ambil data episode tersimpan (null bila belum ada). */
+export async function getEpisodeCache(episodeId) {
+  const { data, error } = await supabase()
+    .from('episode_cache')
+    .select('data')
+    .eq('episode_id', episodeId)
+    .maybeSingle()
+  if (error) throw error
+  return safeJson(data?.data, null)
+}
+
+/** Simpan data episode (daftar server per kualitas) — upsert. */
+export async function saveEpisodeCache(episodeId, data) {
+  const { error } = await supabase().from('episode_cache').upsert(
+    { episode_id: episodeId, data: JSON.stringify(data), fetched_at: new Date().toISOString() },
+    { onConflict: 'episode_id' }
+  )
+  if (error) throw error
+}
