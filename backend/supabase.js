@@ -330,7 +330,8 @@ export async function stats() {
 }
 
 async function count(table) {
-  const { count, error } = await supabase().from(table).select('id', { count: 'exact', head: true })
+  // pakai '*' karena tidak semua tabel punya kolom 'id' (ada yang PK-nya anime_id/server_id/slug)
+  const { count, error } = await supabase().from(table).select('*', { count: 'exact', head: true })
   if (error) throw error
   return count ?? 0
 }
