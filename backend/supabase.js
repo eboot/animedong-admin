@@ -25,10 +25,11 @@ let _client = null
 export function supabase() {
   if (_client) return _client
   const url = process.env.SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_KEY
+  // Terima nama baru (SECRET_KEY) maupun lama (SERVICE_KEY)
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_KEY
   if (!url || !key) {
     throw new Error(
-      'SUPABASE_URL / SUPABASE_SERVICE_KEY belum di-set. ' +
+      'SUPABASE_URL / SUPABASE_SECRET_KEY belum di-set. ' +
         'Isi dari Supabase Dashboard -> Project Settings -> API.'
     )
   }
