@@ -1,3 +1,5 @@
+// BRANCH supabase: backend ini baca/tulis ke Supabase (PostgreSQL),
+// bukan SQLite lokal. Butuh env SUPABASE_URL + SUPABASE_SECRET_KEY.
 import express from 'express'
 import cors from 'cors'
 import { existsSync } from 'node:fs'
@@ -22,7 +24,7 @@ import {
   listDonghuaSchedule,
   stats,
   dashboardStats,
-} from './db.js'
+} from './supabase.js'
 import {
   SOURCES,
   SCHEDULE_SOURCE,
@@ -63,13 +65,13 @@ app.get('/api/sources', (req, res) => {
 })
 
 // List anime yang sudah di-scrape, sort terbaru dulu
-app.get('/api/home', (req, res) => {
+app.get('/api/home', async (req, res) => {
   const { source, q, page, limit } = req.query
   if (source && !SOURCES[source]) {
     return res.status(400).json({ error: `Sumber tidak dikenal: ${source}` })
   }
   res.json(
-    listAnime({
+    await listAnime({
       source: source || undefined,
       q: q || undefined,
       page: Math.max(1, parseInt(page) || 1),
@@ -108,10 +110,10 @@ app.post('/api/scrape', async (req, res) => {
 })
 
 // List jadwal rilisan, urut hari Senin..Minggu
-app.get('/api/schedule', (req, res) => {
+app.get('/api/schedule', async (req, res) => {
   const { day, q, page, limit } = req.query
   res.json(
-    listSchedule({
+    await listSchedule({
       day: day || undefined,
       q: q || undefined,
       page: Math.max(1, parseInt(page) || 1),
@@ -125,7 +127,7 @@ app.get('/api/schedule', (req, res) => {
 app.get('/api/anime/:animeId', async (req, res) => {
   const { animeId } = req.params
   if (!req.query.fresh) {
-    const saved = getAnimeDetail(animeId)
+    const saved = await getAnimeDetail(animeId)
     if (saved) return res.json({ from: 'db', data: saved })
   }
   try {
@@ -137,12 +139,12 @@ app.get('/api/anime/:animeId', async (req, res) => {
 })
 
 // Simpan / update detail anime (dari form edit)
-app.put('/api/anime/:animeId', (req, res) => {
+app.put('/api/anime/:animeId', async (req, res) => {
   const { animeId } = req.params
   const d = req.body ?? {}
   if (!d.title) return res.status(400).json({ error: 'Judul wajib diisi' })
-  saveAnimeDetail(animeId, d)
-  res.json({ ok: true, data: getAnimeDetail(animeId) })
+  await saveAnimeDetail(animeId, d)
+  res.json({ ok: true, data: await getAnimeDetail(animeId) })
 })
 
 // Data episode (daftar server per kualitas) — live dari API.
@@ -151,7 +153,7 @@ app.get('/api/episode/:episodeId', async (req, res) => {
   try {
     const data = await fetchEpisode(req.params.episodeId)
     if (data?.defaultStreamingUrl)
-      saveStreamUrl(`episode:${req.params.episodeId}`, data.defaultStreamingUrl)
+      await saveStreamUrl(`episode:${req.params.episodeId}`, data.defaultStreamingUrl)
     res.json({ ok: true, data })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
@@ -164,19 +166,19 @@ app.get('/api/server/:serverId', async (req, res) => {
   try {
     const { serverId } = req.params
     if (!req.query.fresh) {
-      const cached = getStreamUrl(serverId)
+      const cached = await getStreamUrl(serverId)
       if (cached) return res.json({ ok: true, data: { url: cached }, cached: true })
     }
     const data = await fetchServer(serverId)
-    if (data?.url) saveStreamUrl(serverId, data.url)
+    if (data?.url) await saveStreamUrl(serverId, data.url)
     res.json({ ok: true, data, cached: false })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
   }
 })
 
-app.get('/api/stats', (req, res) => {
-  res.json(stats())
+app.get('/api/stats', async (req, res) => {
+  res.json(await stats())
 })
 
 // Status + trigger manual auto-refresh jadwal (scheduler)
@@ -193,8 +195,8 @@ app.post('/api/scheduler/run', async (req, res) => {
 })
 
 // Ringkasan angka untuk halaman Dashboard
-app.get('/api/dashboard', (req, res) => {
-  res.json({ ok: true, data: dashboardStats() })
+app.get('/api/dashboard', async (req, res) => {
+  res.json({ ok: true, data: await dashboardStats() })
 })
 
 // ---- Donghua ----
@@ -211,10 +213,10 @@ app.get('/api/donghua/sources', (req, res) => {
 })
 
 // List donghua yang sudah di-scrape, sort terbaru dulu
-app.get('/api/donghua', (req, res) => {
+app.get('/api/donghua', async (req, res) => {
   const { q, page, limit } = req.query
   res.json(
-    listDonghua({
+    await listDonghua({
       q: q || undefined,
       page: Math.max(1, parseInt(page) || 1),
       limit: Math.min(200, Math.max(1, parseInt(limit) || 50)),
@@ -243,10 +245,10 @@ app.post('/api/donghua/scrape', async (req, res) => {
 
 // List jadwal donghua yang sudah di-scrape, urut hari Senin..Minggu.
 // (Didefinisikan SEBELUM /:slug agar tidak tertelan parameter slug.)
-app.get('/api/donghua/schedule', (req, res) => {
+app.get('/api/donghua/schedule', async (req, res) => {
   const { day, q, page, limit } = req.query
   res.json(
-    listDonghuaSchedule({
+    await listDonghuaSchedule({
       day: day || undefined,
       q: q || undefined,
       page: Math.max(1, parseInt(page) || 1),
@@ -270,7 +272,7 @@ app.post('/api/donghua/schedule/scrape', async (req, res) => {
 app.get('/api/donghua/:slug', async (req, res) => {
   const { slug } = req.params
   if (!req.query.fresh) {
-    const saved = getDonghuaDetail(slug)
+    const saved = await getDonghuaDetail(slug)
     if (saved) return res.json({ from: 'db', data: saved })
   }
   try {
@@ -282,12 +284,12 @@ app.get('/api/donghua/:slug', async (req, res) => {
 })
 
 // Simpan / update detail donghua (dari form edit)
-app.put('/api/donghua/:slug', (req, res) => {
+app.put('/api/donghua/:slug', async (req, res) => {
   const { slug } = req.params
   const d = req.body ?? {}
   if (!d.title) return res.status(400).json({ error: 'Judul wajib diisi' })
-  saveDonghuaDetail(slug, d)
-  res.json({ ok: true, data: getDonghuaDetail(slug) })
+  await saveDonghuaDetail(slug, d)
+  res.json({ ok: true, data: await getDonghuaDetail(slug) })
 })
 
 // Daftar server streaming sebuah episode donghua — dari database bila sudah
@@ -296,11 +298,11 @@ app.get('/api/donghua/episode/:slug', async (req, res) => {
   try {
     const { slug } = req.params
     if (!req.query.fresh) {
-      const cached = getDonghuaStream(slug)
+      const cached = await getDonghuaStream(slug)
       if (cached) return res.json({ ok: true, data: cached, cached: true })
     }
     const data = await fetchDonghuaEpisode(slug)
-    saveDonghuaStream(slug, data)
+    await saveDonghuaStream(slug, data)
     res.json({ ok: true, data, cached: false })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })

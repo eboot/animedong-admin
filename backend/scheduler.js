@@ -3,7 +3,7 @@
 // Zona waktu: Asia/Makassar (WITA).
 import cron from 'node-cron'
 import { scrapeSchedule, scrapeDonghuaSchedule } from './scrape.js'
-import { insertSchedule, insertDonghuaSchedule } from './db.js'
+import { insertSchedule, insertDonghuaSchedule } from './supabase.js'
 
 const TIMEZONE = 'Asia/Makassar'
 // Jam 01:00 dan 13:00 WITA setiap hari

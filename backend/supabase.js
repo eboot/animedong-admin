@@ -168,3 +168,205 @@ export async function listDonghuaSchedule({ day, q, page = 1, limit = 200 } = {}
   if (error) throw error
   return { total: count ?? 0, page, limit, rows: data ?? [] }
 }
+
+// ---- Detail, stream cache, statistik (cerminan db.js) ----
+
+function safeJson(s, fallback) {
+  try {
+    return s ? JSON.parse(s) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+/** Ambil detail anime dari DB (null bila belum ada). */
+export async function getAnimeDetail(animeId) {
+  const { data, error } = await supabase()
+    .from('anime_detail')
+    .select('*')
+    .eq('anime_id', animeId)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return {
+    ...data,
+    synopsis: safeJson(data.synopsis, { paragraphs: [], connections: [] }),
+    genres: safeJson(data.genres, []),
+    episode_list: safeJson(data.episode_list, []),
+  }
+}
+
+/** Simpan / update detail anime (dari form edit). */
+export async function saveAnimeDetail(animeId, d) {
+  const str = (v) => (v == null ? '' : String(v))
+  const js = (v) => JSON.stringify(v ?? [])
+  const { error } = await supabase()
+    .from('anime_detail')
+    .upsert(
+      {
+        anime_id: animeId,
+        title: str(d.title),
+        poster: str(d.poster),
+        japanese: str(d.japanese),
+        score: str(d.score),
+        producers: str(d.producers),
+        type: str(d.type),
+        status: str(d.status),
+        episodes: str(d.episodes),
+        duration: str(d.duration),
+        aired: str(d.aired),
+        studios: str(d.studios),
+        synopsis: typeof d.synopsis === 'string' ? d.synopsis : js(d.synopsis),
+        genres: js(d.genres),
+        episode_list: js(d.episode_list),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'anime_id' }
+    )
+  if (error) throw error
+}
+
+/** Ambil URL stream tersimpan ('…' bila kosong). */
+export async function getStreamUrl(serverId) {
+  const { data, error } = await supabase()
+    .from('stream_cache')
+    .select('url')
+    .eq('server_id', serverId)
+    .maybeSingle()
+  if (error) throw error
+  return data?.url || ''
+}
+
+/** Simpan URL stream (upsert). */
+export async function saveStreamUrl(serverId, url) {
+  const { error } = await supabase().from('stream_cache').upsert(
+    { server_id: serverId, url, fetched_at: new Date().toISOString() },
+    { onConflict: 'server_id' }
+  )
+  if (error) throw error
+}
+
+/** Ambil detail donghua dari DB (null bila belum ada). */
+export async function getDonghuaDetail(slug) {
+  const { data, error } = await supabase()
+    .from('donghua_detail')
+    .select('*')
+    .eq('slug', slug)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return {
+    ...data,
+    genres: safeJson(data.genres, []),
+    episodes_list: safeJson(data.episodes_list, []),
+  }
+}
+
+/** Simpan / update detail donghua. */
+export async function saveDonghuaDetail(slug, d) {
+  const str = (v) => (v == null ? '' : String(v))
+  const js = (v) => JSON.stringify(v ?? [])
+  const { error } = await supabase()
+    .from('donghua_detail')
+    .upsert(
+      {
+        slug,
+        title: str(d.title),
+        poster: str(d.poster),
+        cover: str(d.cover),
+        status: str(d.status),
+        type: str(d.type),
+        rating: str(d.rating),
+        studio: str(d.studio),
+        network: str(d.network),
+        released: str(d.released),
+        duration: str(d.duration),
+        episodes_count: str(d.episodes_count),
+        season: str(d.season),
+        country: str(d.country),
+        subber: str(d.subber),
+        genres: js(d.genres),
+        synopsis: typeof d.synopsis === 'string' ? d.synopsis : js(d.synopsis),
+        episodes_list: js(d.episodes_list),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'slug' }
+    )
+  if (error) throw error
+}
+
+/** Ambil data stream donghua tersimpan (null bila belum ada). */
+export async function getDonghuaStream(slug) {
+  const { data, error } = await supabase()
+    .from('donghua_stream')
+    .select('data')
+    .eq('slug', slug)
+    .maybeSingle()
+  if (error) throw error
+  return safeJson(data?.data, null)
+}
+
+/** Simpan data stream donghua (upsert). */
+export async function saveDonghuaStream(slug, data) {
+  const { error } = await supabase().from('donghua_stream').upsert(
+    { slug, data: JSON.stringify(data), fetched_at: new Date().toISOString() },
+    { onConflict: 'slug' }
+  )
+  if (error) throw error
+}
+
+/** Statistik per sumber (untuk /api/stats). */
+export async function stats() {
+  const { data, error } = await supabase().from('home').select('source, scraped_at')
+  if (error) throw error
+  const map = new Map()
+  for (const r of data ?? []) {
+    const e = map.get(r.source) ?? { source: r.source, total: 0, last_scrape: null }
+    e.total++
+    if (!e.last_scrape || r.scraped_at > e.last_scrape) e.last_scrape = r.scraped_at
+    map.set(r.source, e)
+  }
+  return [...map.values()]
+}
+
+async function count(table) {
+  const { count, error } = await supabase().from(table).select('id', { count: 'exact', head: true })
+  if (error) throw error
+  return count ?? 0
+}
+
+/** Ringkasan angka untuk halaman Dashboard. */
+export async function dashboardStats() {
+  const [homeTotal, detailTotal, schedTotal, donghuaTotal, donghuaDetailTotal, streamTotal, donghuaStreamTotal] =
+    await Promise.all([
+      count('home'),
+      count('anime_detail'),
+      count('schedule'),
+      count('donghua'),
+      count('donghua_detail'),
+      count('stream_cache'),
+      count('donghua_stream'),
+    ])
+  const bySource = await stats()
+  bySource.sort((a, b) => b.total - a.total)
+  const { data: schedRows, error: schedErr } = await supabase().from('schedule').select('day')
+  if (schedErr) throw schedErr
+  const dayMap = new Map()
+  for (const r of schedRows ?? []) dayMap.set(r.day, (dayMap.get(r.day) ?? 0) + 1)
+  const { data: recent, error: recentErr } = await supabase()
+    .from('home')
+    .select('source, title, episodes, scraped_at')
+    .order('scraped_at', { ascending: false })
+    .limit(8)
+  if (recentErr) throw recentErr
+  return {
+    anime: { total: homeTotal, details: detailTotal, bySource },
+    schedule: {
+      total: schedTotal,
+      byDay: [...dayMap.entries()].map(([day, total]) => ({ day, total })),
+    },
+    donghua: { total: donghuaTotal, details: donghuaDetailTotal },
+    streams: { anime: streamTotal, donghua: donghuaStreamTotal },
+    recent: recent ?? [],
+  }
+}

@@ -100,7 +100,7 @@ export async function scrapeSource(key, insertFn) {
   let inserted = 0
   for (const item of items) {
     if (!item.title) continue
-    if (insertFn(item)) inserted++
+    if (await insertFn(item)) inserted++
   }
   return { source: key, total: items.length, inserted, skipped: items.length - inserted }
 }
@@ -128,7 +128,7 @@ export async function scrapeSchedule(insertFn) {
       total++
       // Format baru: tanpa poster/url; otakudesuUrl TIDAK disimpan (URL eksternal).
       if (
-        insertFn({
+        await insertFn({
           day: clean(d.title ?? d.day),
           anime_id: String(slug),
           title: clean(a.title),
@@ -309,7 +309,7 @@ export async function scrapeDonghua(insertFn) {
     total += items.length
     for (const item of items) {
       if (!item.title) continue
-      if (insertFn(item)) inserted++
+      if (await insertFn(item)) inserted++
     }
     if (page < MAX_PAGE) await new Promise((r) => setTimeout(r, 300))
   }
@@ -391,7 +391,7 @@ export async function scrapeDonghuaSchedule(insertFn) {
         url: '',
         eps: it.eps != null ? String(it.eps) : '',
       }
-      if (insertFn(item)) inserted++
+      if (await insertFn(item)) inserted++
     }
   }
   return { source: 'donghua-schedule', total, inserted, skipped: total - inserted }
