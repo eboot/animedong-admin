@@ -50,11 +50,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || 3001
 
+// Bungkus handler async agar DB error jadi 502 JSON, bukan crash proses.
+const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next)
+
 app.use(cors())
 app.use(express.json())
 
 // Daftar sumber API yang tersedia (untuk dropdown frontend)
-app.get('/api/sources', (req, res) => {
+app.get('/api/sources', ah(async (req, res) => {
   res.json(
     Object.entries(SOURCES).map(([key, s]) => ({
       key,
@@ -62,10 +65,10 @@ app.get('/api/sources', (req, res) => {
       url: s.url,
     }))
   )
-})
+}))
 
 // List anime yang sudah di-scrape, sort terbaru dulu
-app.get('/api/home', async (req, res) => {
+app.get('/api/home', ah(async (req, res) => {
   const { source, q, page, limit } = req.query
   if (source && !SOURCES[source]) {
     return res.status(400).json({ error: `Sumber tidak dikenal: ${source}` })
@@ -78,11 +81,11 @@ app.get('/api/home', async (req, res) => {
       limit: Math.min(200, Math.max(1, parseInt(limit) || 50)),
     })
   )
-})
+}))
 
 // Scrape + simpan ke database "home" (duplikat dilewati).
 // Body: { source } — boleh berupa key (animehome) atau URL API-nya langsung.
-app.post('/api/scrape', async (req, res) => {
+app.post('/api/scrape', ah(async (req, res) => {
   let { source } = req.body ?? {}
   if (source === 'schedule' || source === SCHEDULE_SOURCE.url) {
     try {
@@ -107,10 +110,10 @@ app.post('/api/scrape', async (req, res) => {
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
   }
-})
+}))
 
 // List jadwal rilisan, urut hari Senin..Minggu
-app.get('/api/schedule', async (req, res) => {
+app.get('/api/schedule', ah(async (req, res) => {
   const { day, q, page, limit } = req.query
   res.json(
     await listSchedule({
@@ -120,11 +123,11 @@ app.get('/api/schedule', async (req, res) => {
       limit: Math.min(500, Math.max(1, parseInt(limit) || 100)),
     })
   )
-})
+}))
 
 // Detail anime: dari database bila ada, bila belum — ambil live dari API.
 // Param ?fresh=1 memaksa ambil live walau sudah ada di database.
-app.get('/api/anime/:animeId', async (req, res) => {
+app.get('/api/anime/:animeId', ah(async (req, res) => {
   const { animeId } = req.params
   if (!req.query.fresh) {
     const saved = await getAnimeDetail(animeId)
@@ -136,20 +139,20 @@ app.get('/api/anime/:animeId', async (req, res) => {
   } catch (e) {
     res.status(502).json({ error: e.message })
   }
-})
+}))
 
 // Simpan / update detail anime (dari form edit)
-app.put('/api/anime/:animeId', async (req, res) => {
+app.put('/api/anime/:animeId', ah(async (req, res) => {
   const { animeId } = req.params
   const d = req.body ?? {}
   if (!d.title) return res.status(400).json({ error: 'Judul wajib diisi' })
   await saveAnimeDetail(animeId, d)
   res.json({ ok: true, data: await getAnimeDetail(animeId) })
-})
+}))
 
 // Data episode (daftar server per kualitas) — live dari API.
 // defaultStreamingUrl ikut disimpan ke stream_cache.
-app.get('/api/episode/:episodeId', async (req, res) => {
+app.get('/api/episode/:episodeId', ah(async (req, res) => {
   try {
     const data = await fetchEpisode(req.params.episodeId)
     if (data?.defaultStreamingUrl)
@@ -158,11 +161,11 @@ app.get('/api/episode/:episodeId', async (req, res) => {
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
   }
-})
+}))
 
 // URL stream dari sebuah serverId — dari database bila sudah tersimpan,
 // kalau belum baru ambil live dari API lalu simpan. ?fresh=1 memaksa ambil live.
-app.get('/api/server/:serverId', async (req, res) => {
+app.get('/api/server/:serverId', ah(async (req, res) => {
   try {
     const { serverId } = req.params
     if (!req.query.fresh) {
@@ -175,34 +178,34 @@ app.get('/api/server/:serverId', async (req, res) => {
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
   }
-})
+}))
 
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', ah(async (req, res) => {
   res.json(await stats())
-})
+}))
 
 // Status + trigger manual auto-refresh jadwal (scheduler)
-app.get('/api/scheduler/status', (req, res) => {
+app.get('/api/scheduler/status', ah(async (req, res) => {
   res.json({ ok: true, data: getSchedulerStatus() })
-})
-app.post('/api/scheduler/run', async (req, res) => {
+}))
+app.post('/api/scheduler/run', ah(async (req, res) => {
   try {
     const result = await runAllSchedulesNow()
     res.json({ ok: true, data: result })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
   }
-})
+}))
 
 // Ringkasan angka untuk halaman Dashboard
-app.get('/api/dashboard', async (req, res) => {
+app.get('/api/dashboard', ah(async (req, res) => {
   res.json({ ok: true, data: await dashboardStats() })
-})
+}))
 
 // ---- Donghua ----
 
 // Daftar sumber API donghua (untuk dropdown frontend)
-app.get('/api/donghua/sources', (req, res) => {
+app.get('/api/donghua/sources', ah(async (req, res) => {
   res.json(
     Object.entries(DONGHUA_SOURCES).map(([key, s]) => ({
       key,
@@ -210,10 +213,10 @@ app.get('/api/donghua/sources', (req, res) => {
       url: s.url,
     }))
   )
-})
+}))
 
 // List donghua yang sudah di-scrape, sort terbaru dulu
-app.get('/api/donghua', async (req, res) => {
+app.get('/api/donghua', ah(async (req, res) => {
   const { q, page, limit } = req.query
   res.json(
     await listDonghua({
@@ -222,11 +225,11 @@ app.get('/api/donghua', async (req, res) => {
       limit: Math.min(200, Math.max(1, parseInt(limit) || 50)),
     })
   )
-})
+}))
 
 // Scrape + simpan ke database (duplikat dilewati).
 // Body: { source } — key 'donghua' atau URL API-nya langsung.
-app.post('/api/donghua/scrape', async (req, res) => {
+app.post('/api/donghua/scrape', ah(async (req, res) => {
   const { source } = req.body ?? {}
   const key =
     DONGHUA_SOURCES[source]
@@ -241,11 +244,11 @@ app.post('/api/donghua/scrape', async (req, res) => {
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
   }
-})
+}))
 
 // List jadwal donghua yang sudah di-scrape, urut hari Senin..Minggu.
 // (Didefinisikan SEBELUM /:slug agar tidak tertelan parameter slug.)
-app.get('/api/donghua/schedule', async (req, res) => {
+app.get('/api/donghua/schedule', ah(async (req, res) => {
   const { day, q, page, limit } = req.query
   res.json(
     await listDonghuaSchedule({
@@ -255,21 +258,21 @@ app.get('/api/donghua/schedule', async (req, res) => {
       limit: Math.min(500, Math.max(1, parseInt(limit) || 200)),
     })
   )
-})
+}))
 
 // Scrape + simpan jadwal donghua ke database (duplikat dilewati)
-app.post('/api/donghua/schedule/scrape', async (req, res) => {
+app.post('/api/donghua/schedule/scrape', ah(async (req, res) => {
   try {
     const result = await scrapeDonghuaSchedule(insertDonghuaSchedule)
     res.json({ ok: true, ...result, url: DONGHUA_SCHEDULE_SOURCE.url })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
   }
-})
+}))
 
 // Detail donghua: dari database bila ada, bila belum — ambil live dari API.
 // Param ?fresh=1 memaksa ambil live walau sudah ada di database.
-app.get('/api/donghua/:slug', async (req, res) => {
+app.get('/api/donghua/:slug', ah(async (req, res) => {
   const { slug } = req.params
   if (!req.query.fresh) {
     const saved = await getDonghuaDetail(slug)
@@ -281,20 +284,20 @@ app.get('/api/donghua/:slug', async (req, res) => {
   } catch (e) {
     res.status(502).json({ error: e.message })
   }
-})
+}))
 
 // Simpan / update detail donghua (dari form edit)
-app.put('/api/donghua/:slug', async (req, res) => {
+app.put('/api/donghua/:slug', ah(async (req, res) => {
   const { slug } = req.params
   const d = req.body ?? {}
   if (!d.title) return res.status(400).json({ error: 'Judul wajib diisi' })
   await saveDonghuaDetail(slug, d)
   res.json({ ok: true, data: await getDonghuaDetail(slug) })
-})
+}))
 
 // Daftar server streaming sebuah episode donghua — dari database bila sudah
 // tersimpan, kalau belum ambil live dari API lalu simpan. ?fresh=1 memaksa live.
-app.get('/api/donghua/episode/:slug', async (req, res) => {
+app.get('/api/donghua/episode/:slug', ah(async (req, res) => {
   try {
     const { slug } = req.params
     if (!req.query.fresh) {
@@ -307,6 +310,12 @@ app.get('/api/donghua/episode/:slug', async (req, res) => {
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
   }
+}))
+
+// Error handler khusus API: DB error -> 502 JSON (jangan crash)
+app.use('/api', (err, req, res, next) => {
+  console.error('[api error]', err.message)
+  res.status(502).json({ ok: false, error: err.message })
 })
 
 // Sajikan build frontend jika ada (npm run build di root -> build/)
