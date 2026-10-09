@@ -135,6 +135,7 @@ app.get('/api/anime/:animeId', ah(async (req, res) => {
   }
   try {
     const data = await fetchAnimeDetail(animeId)
+    await saveAnimeDetail(animeId, data) // langsung masuk database
     res.json({ from: 'live', data })
   } catch (e) {
     res.status(502).json({ error: e.message })
@@ -280,6 +281,7 @@ app.get('/api/donghua/:slug', ah(async (req, res) => {
   }
   try {
     const data = await fetchDonghuaDetail(slug)
+    await saveDonghuaDetail(slug, data) // langsung masuk database
     res.json({ from: 'live', data })
   } catch (e) {
     res.status(502).json({ error: e.message })
