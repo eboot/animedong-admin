@@ -7,6 +7,12 @@
 #   animeapi        : http://<IP>/kura/api/*   (-> :3002)
 #
 # Aman dijalankan ulang: git pull, npm install, rebuild, restart service.
+
+# Kalau dijalankan via sh/dash, re-exec pakai bash (butuh pipefail).
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
+
 set -euo pipefail
 
 ADMIN_DIR="/opt/animedong-admin"
