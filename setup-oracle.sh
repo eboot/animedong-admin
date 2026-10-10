@@ -15,6 +15,10 @@ fi
 
 set -euo pipefail
 
+# npm di Oracle Cloud sering ngegantung di tahap resolve (masalah IPv6/DNS).
+# Paksa IPv4 dulu biar install jalan.
+export NODE_OPTIONS="--dns-result-order=ipv4first ${NODE_OPTIONS:-}"
+
 ADMIN_DIR="/home/ubuntu/app/animedong-admin"
 ADMIN_USER="ubuntu"
 KURA_DIR="/home/ubuntu/app/animeapi"
@@ -55,7 +59,8 @@ else
 fi
 chown -R "$ADMIN_USER:$ADMIN_USER" "$ADMIN_DIR"
 cd "$ADMIN_DIR"
-sudo -u "$ADMIN_USER" npm run install:all
+sudo -u "$ADMIN_USER" npm install --no-audit --no-fund
+sudo -u "$ADMIN_USER" npm --prefix backend install --no-audit --no-fund
 sudo -u "$ADMIN_USER" npm run build
 
 echo "== 3. animeapi (branch supabase): git pull + install =="
@@ -68,7 +73,7 @@ else
 fi
 chown -R "$KURA_USER:$KURA_USER" "$KURA_DIR"
 cd "$KURA_DIR"
-sudo -u "$KURA_USER" npm install
+sudo -u "$KURA_USER" npm install --no-audit --no-fund
 
 echo "== 4. systemd services =="
 cat > /etc/systemd/system/animedong-admin.service <<'EOF'
