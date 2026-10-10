@@ -48,13 +48,13 @@ cd "$ADMIN_DIR"
 npm run install:all
 npm run build
 
-echo "== 3. animeapi: git pull + install =="
+echo "== 3. animeapi (branch supabase): git pull + install =="
 if [ -d "$KURA_DIR/.git" ]; then
   git -C "$KURA_DIR" fetch origin
-  git -C "$KURA_DIR" reset --hard origin/main
+  git -C "$KURA_DIR" reset --hard origin/supabase
 else
   sudo -u "$KURA_USER" mkdir -p "$(dirname "$KURA_DIR")"
-  sudo -u "$KURA_USER" git clone --depth 1 https://github.com/eboot/animeapi.git "$KURA_DIR"
+  sudo -u "$KURA_USER" git clone --depth 1 -b supabase https://github.com/eboot/animeapi.git "$KURA_DIR"
 fi
 chown -R "$KURA_USER:$KURA_USER" "$KURA_DIR"
 cd "$KURA_DIR"
@@ -89,7 +89,7 @@ EOF
 
 cat > /etc/systemd/system/animeapi.service <<'EOF'
 [Unit]
-Description=AnimeAPI Kurama Scraper
+Description=AnimeAPI Kurama Scraper (Supabase)
 After=network-online.target
 Wants=network-online.target
 
@@ -102,6 +102,11 @@ Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=3002
+# Kredensial Supabase (WAJIB): taruh di /etc/animeapi.env, format:
+#   SUPABASE_URL=https://xyz.supabase.co
+#   SUPABASE_SECRET_KEY=...
+# File ini tidak ikut git (repo publik), dibuat manual sekali.
+EnvironmentFile=-/etc/animeapi.env
 # R2 CDN image (isi lalu uncomment kalau sudah punya):
 #Environment=R2_ACCOUNT_ID=
 #Environment=R2_ACCESS_KEY_ID=
@@ -176,3 +181,11 @@ echo "  animedong-admin : http://$PUBIP/"
 echo "  animeapi        : http://$PUBIP/kura/api/stats"
 echo ""
 echo "PENTING: OCI Console -> Networking -> Security List VCN -> tambah Ingress 0.0.0.0/0 TCP 80."
+echo ""
+echo "SUPABASE (wajib untuk animeapi):"
+echo "  1. Jalankan supabase-schema.sql (branch supabase repo animeapi) di Supabase SQL Editor."
+echo "  2. Buat /etc/animeapi.env berisi:"
+echo "       SUPABASE_URL=https://xyz.supabase.co"
+echo "       SUPABASE_SECRET_KEY=..."
+echo "     lalu: sudo systemctl restart animeapi"
+echo "  Tanpa ini, /kura/api/* jawab 502 (env belum di-set)."
