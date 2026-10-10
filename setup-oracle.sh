@@ -15,9 +15,11 @@ fi
 
 set -euo pipefail
 
-ADMIN_DIR="/opt/animedong-admin"
+ADMIN_DIR="/home/ubuntu/app/animedong-admin"
+ADMIN_USER="ubuntu"
 KURA_DIR="/home/ubuntu/app/animeapi"
 KURA_USER="ubuntu"
+OLD_ADMIN_DIR="/opt/animedong-admin" # lokasi lama (pra-2026-10-10), untuk migrasi DB
 
 echo "== 0. Node.js 22 LTS =="
 if ! command -v node >/dev/null 2>&1 || [ "$(node -v | cut -d. -f1 | tr -d v)" -lt 22 ]; then
@@ -41,12 +43,20 @@ if [ -d "$ADMIN_DIR/.git" ]; then
   git -C "$ADMIN_DIR" fetch origin
   git -C "$ADMIN_DIR" reset --hard origin/main
 else
-  rm -rf "$ADMIN_DIR"
-  git clone --depth 1 https://github.com/eboot/animedong-admin.git "$ADMIN_DIR"
+  sudo -u "$ADMIN_USER" mkdir -p "$(dirname "$ADMIN_DIR")"
+  sudo -u "$ADMIN_USER" git clone --depth 1 https://github.com/eboot/animedong-admin.git "$ADMIN_DIR"
+  # Migrasi database SQLite dari lokasi lama (/opt/animedong-admin) kalau ada
+  if [ -f "$OLD_ADMIN_DIR/backend/data/home.sqlite" ] && [ ! -f "$ADMIN_DIR/backend/data/home.sqlite" ]; then
+    echo "migrasi database dari $OLD_ADMIN_DIR ..."
+    sudo -u "$ADMIN_USER" mkdir -p "$ADMIN_DIR/backend/data"
+    cp -a "$OLD_ADMIN_DIR/backend/data/home.sqlite" "$ADMIN_DIR/backend/data/home.sqlite"
+    chown "$ADMIN_USER:$ADMIN_USER" "$ADMIN_DIR/backend/data/home.sqlite"
+  fi
 fi
+chown -R "$ADMIN_USER:$ADMIN_USER" "$ADMIN_DIR"
 cd "$ADMIN_DIR"
-npm run install:all
-npm run build
+sudo -u "$ADMIN_USER" npm run install:all
+sudo -u "$ADMIN_USER" npm run build
 
 echo "== 3. animeapi (branch supabase): git pull + install =="
 if [ -d "$KURA_DIR/.git" ]; then
@@ -68,9 +78,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
-WorkingDirectory=/opt/animedong-admin
-ExecStart=/usr/bin/node /opt/animedong-admin/backend/server.js
+User=ubuntu
+WorkingDirectory=/home/ubuntu/app/animedong-admin
+ExecStart=/usr/bin/node /home/ubuntu/app/animedong-admin/backend/server.js
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
@@ -177,8 +187,8 @@ curl -s -o /dev/null -w "nginx / (:80)                 -> HTTP %{http_code}\n" h
 PUBIP=$(curl -s --max-time 5 https://api.ipify.org || echo "<IP-PUBLIK-VM>")
 echo ""
 echo "SELESAI."
-echo "  animedong-admin : http://$PUBIP/"
-echo "  animeapi        : http://$PUBIP/kura/api/stats"
+echo "  animedong-admin : http://$PUBIP/  (/home/ubuntu/app/animedong-admin)"
+echo "  animeapi        : http://$PUBIP/kura/api/stats  (/home/ubuntu/app/animeapi)"
 echo ""
 echo "PENTING: OCI Console -> Networking -> Security List VCN -> tambah Ingress 0.0.0.0/0 TCP 80."
 echo ""
