@@ -44,7 +44,7 @@ import {
   getSchedulerStatus,
   runAllSchedulesNow,
 } from './scheduler.js'
-import { scrapeKurama, fetchKuramaDetail, kuramaStatus } from './kurama.js'
+import { scrapeKurama, fetchKuramaList, fetchKuramaDetail, kuramaStatus } from './kurama.js'
 import { r2Enabled } from './r2.js'
 import { syncPostersToR2 } from './r2-sync.js'
 
@@ -115,12 +115,12 @@ app.post('/api/scrape', async (req, res) => {
       error: 'Pilih sumber dulu: animehome | animebrowse | kurama | schedule',
     })
   }
-  // Sumber kurama: scrape lewat API animeapi (backend/kurama.js).
+  // Sumber kurama: trigger scrape di animeapi. Data masuk ke database
+  // animeapi (Supabase); dashboard baca langsung via /api/kurama/anime.
   if (key === 'kurama') {
     try {
-      const result = await scrapeKurama(insertAnime, req.body?.n ?? 10)
-      triggerR2Sync()
-      return res.json({ ok: true, ...result })
+      const result = await scrapeKurama(req.body?.n ?? 10)
+      return res.json({ ok: true, source: 'kurama', ...result })
     } catch (e) {
       return res.status(502).json({ ok: false, error: e.message })
     }
@@ -148,7 +148,7 @@ app.get('/api/schedule', (req, res) => {
 })
 
 // Detail anime: dari database bila ada, bila belum — ambil live dari API.
-// Anime bersumber 'kurama' diambil lewat animeapi (bukan otakudesu).
+// Anime kurama (ID numerik) diambil lewat animeapi, bukan otakudesu.
 // Param ?fresh=1 memaksa ambil live walau sudah ada di database.
 app.get('/api/anime/:animeId', async (req, res) => {
   const { animeId } = req.params
@@ -158,9 +158,29 @@ app.get('/api/anime/:animeId', async (req, res) => {
   }
   try {
     const source = getAnimeSource(animeId)
-    const data =
-      source === 'kurama' ? await fetchKuramaDetail(animeId) : await fetchAnimeDetail(animeId)
-    res.json({ from: 'live', data })
+    // ID numerik = anime dari animeapi (kurama); tidak tersimpan di home.
+    const isKurama = source === 'kurama' || /^\d+$/.test(animeId)
+    const data = isKurama ? await fetchKuramaDetail(animeId) : await fetchAnimeDetail(animeId)
+    res.json({ from: isKurama ? 'kurama' : 'live', data })
+  } catch (e) {
+    res.status(502).json({ error: e.message })
+  }
+})
+
+// List anime langsung dari database animeapi (Supabase) — tanpa import
+// ke database animedong-admin. Format sama seperti /api/home.
+app.get('/api/kurama/anime', async (req, res) => {
+  try {
+    res.json(await fetchKuramaList(req.query))
+  } catch (e) {
+    res.status(502).json({ error: e.message })
+  }
+})
+
+// Detail satu anime dari animeapi (khusus kurama).
+app.get('/api/kurama/anime/:id', async (req, res) => {
+  try {
+    res.json({ from: 'kurama', data: await fetchKuramaDetail(req.params.id) })
   } catch (e) {
     res.status(502).json({ error: e.message })
   }

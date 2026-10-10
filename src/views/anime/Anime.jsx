@@ -30,13 +30,14 @@ const SOURCE_COLORS = {
   anoboy: 'warning',
   animeindo: 'success',
   animebrowse: 'danger',
+  kurama: 'dark',
 }
 
 const PAGE_SIZE = 20
 
 const Anime = () => {
   const [sources, setSources] = useState([])
-  const [source, setSource] = useState('')
+  const [sourceKey, setSourceKey] = useState('')
   const [rows, setRows] = useState([])
   const [total, setTotal] = useState(0)
   const [query, setQuery] = useState('')
@@ -46,7 +47,9 @@ const Anime = () => {
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
 
-  const fetchList = useCallback(async (q = '', p = 1) => {
+  // key = '' -> semua sumber (tabel home); 'kurama' -> baca langsung
+  // dari database animeapi; lainnya -> filter tabel home per sumber.
+  const fetchList = useCallback(async (q = '', p = 1, key = '') => {
     setLoading(true)
     setError('')
     try {
@@ -55,13 +58,21 @@ const Anime = () => {
         page: String(p),
       })
       if (q) params.set('q', q)
-      const res = await fetch(`${API_BASE}/api/home?${params}`)
+      let url
+      if (key === 'kurama') {
+        url = `${API_BASE}/api/kurama/anime?${params}`
+      } else {
+        if (key) params.set('source', key)
+        url = `${API_BASE}/api/home?${params}`
+      }
+      const res = await fetch(url)
       const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Gagal memuat data')
       setRows(data.rows || [])
       setTotal(data.total || 0)
       setPage(data.page || p)
-    } catch {
-      setError('Gagal memuat data. Pastikan backend jalan di ' + API_BASE)
+    } catch (e) {
+      setError(e.message || 'Gagal memuat data. Pastikan backend jalan di ' + API_BASE)
     } finally {
       setLoading(false)
     }
@@ -72,11 +83,11 @@ const Anime = () => {
       .then((r) => r.json())
       .then(setSources)
       .catch(() => setSources([]))
-    fetchList()
+    fetchList('', 1, '')
   }, [fetchList])
 
   const handleScrape = async () => {
-    if (!source) return
+    if (!sourceKey) return
     setScraping(true)
     setResult(null)
     setError('')
@@ -84,18 +95,21 @@ const Anime = () => {
       const res = await fetch(`${API_BASE}/api/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source }),
+        body: JSON.stringify({ source: sourceKey }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Scrape gagal')
       setResult(data)
-      fetchList(query, 1)
+      fetchList(query, 1, sourceKey)
     } catch (e) {
       setError(e.message)
     } finally {
       setScraping(false)
     }
   }
+
+  const kuramaResults = result?.source === 'kurama' ? result.results || [] : []
+  const kuramaOk = kuramaResults.filter((r) => r.ok).length
 
   return (
     <CCard>
@@ -105,13 +119,19 @@ const Anime = () => {
           <CCol md={5}>
             <CFormSelect
               label="URL API Sumber"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
+              value={sourceKey}
+              onChange={(e) => {
+                const k = e.target.value
+                setSourceKey(k)
+                setQuery('')
+                fetchList('', 1, k)
+              }}
             >
               <option value="">— Pilih sumber API —</option>
               {sources.map((s) => (
-                <option key={s.key} value={s.url}>
-                  {s.label} — {s.url}
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                  {s.url && !s.url.startsWith('kurama://') ? ` — ${s.url}` : ''}
                 </option>
               ))}
             </CFormSelect>
@@ -120,7 +140,7 @@ const Anime = () => {
             <CButton
               color="primary"
               onClick={handleScrape}
-              disabled={!source || scraping}
+              disabled={!sourceKey || scraping}
             >
               {scraping ? (
                 <>
@@ -137,7 +157,7 @@ const Anime = () => {
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value)
-                fetchList(e.target.value, 1)
+                fetchList(e.target.value, 1, sourceKey)
               }}
             />
           </CCol>
@@ -145,9 +165,22 @@ const Anime = () => {
 
         {result && (
           <CAlert color="success" dismissible onClose={() => setResult(null)}>
-            Scrape <strong>{sources.find((s) => s.url === source)?.label || source}</strong>{' '}
-            selesai: {result.inserted} data baru disimpan, {result.skipped} dilewati
-            (sudah ada) dari {result.total} total.
+            {result.source === 'kurama' ? (
+              <>
+                Scrape <strong>Kurama (via animeapi)</strong> selesai: {kuramaOk}{' '}
+                berhasil, {kuramaResults.length - kuramaOk} gagal dari{' '}
+                {kuramaResults.length} anime. Data tersimpan di database animeapi.
+              </>
+            ) : (
+              <>
+                Scrape{' '}
+                <strong>
+                  {sources.find((s) => s.key === sourceKey)?.label || sourceKey}
+                </strong>{' '}
+                selesai: {result.inserted} data baru disimpan, {result.skipped}{' '}
+                dilewati (sudah ada) dari {result.total} total.
+              </>
+            )}
           </CAlert>
         )}
         {error && (
@@ -157,7 +190,8 @@ const Anime = () => {
         )}
 
         <p className="text-body-secondary">
-          {total} anime tersimpan — urut dari yang terbaru di-scrape.
+          {total} anime {sourceKey === 'kurama' ? 'di database animeapi' : 'tersimpan'}{' '}
+          — urut dari yang terbaru di-scrape.
         </p>
 
         {loading ? (
@@ -186,7 +220,7 @@ const Anime = () => {
                   </CTableRow>
                 )}
                 {rows.map((a) => (
-                  <CTableRow key={a.id}>
+                  <CTableRow key={`${a.source}:${a.anime_id}`}>
                     <CTableDataCell>
                       {a.poster ? (
                         <img
@@ -223,7 +257,7 @@ const Anime = () => {
           <CPagination className="justify-content-center mt-3 mb-0" aria-label="Navigasi halaman">
             <CPaginationItem
               disabled={page <= 1}
-              onClick={() => fetchList(query, page - 1)}
+              onClick={() => fetchList(query, page - 1, sourceKey)}
             >
               ‹
             </CPaginationItem>
@@ -236,7 +270,7 @@ const Anime = () => {
                 <CPaginationItem
                   key={p}
                   active={p === page}
-                  onClick={() => fetchList(query, p)}
+                  onClick={() => fetchList(query, p, sourceKey)}
                 >
                   {p}
                 </CPaginationItem>
@@ -244,7 +278,7 @@ const Anime = () => {
             )}
             <CPaginationItem
               disabled={page >= Math.ceil(total / PAGE_SIZE)}
-              onClick={() => fetchList(query, page + 1)}
+              onClick={() => fetchList(query, page + 1, sourceKey)}
             >
               ›
             </CPaginationItem>

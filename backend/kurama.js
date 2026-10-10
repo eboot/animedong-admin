@@ -1,6 +1,9 @@
 // Integrasi animeapi (KuramaAnime scraper) sebagai sumber data anime.
-// Semua scrape data anime lewat API animeapi — animedong-admin tidak lagi
-// scraping langsung untuk sumber 'kurama', cukup baca dari animeapi.
+//
+// Arsitektur: animedong-admin TIDAK menyimpan data kurama di database-nya
+// sendiri. Scrape di-trigger ke animeapi (datanya masuk ke database animeapi,
+// yaitu Supabase), dan dashboard membaca langsung dari animeapi lewat fungsi
+// di file ini (node sebagai perantara, browser tidak hit animeapi langsung).
 //
 // Env: KURAMA_API_URL (default http://127.0.0.1:3002)
 
@@ -9,63 +12,64 @@ const clean = (s) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : ''
 export const kuramaBase = () =>
   (process.env.KURAMA_API_URL || 'http://127.0.0.1:3002').replace(/\/+$/, '')
 
-/** Mapping satu anime animeapi -> baris tabel home (source='kurama'). */
-function mapKurama(a) {
-  return {
-    source: 'kurama',
-    anime_id: String(a.id),
-    title: clean(a.title),
-    poster: a.poster || '',
-    episodes: a.episodes_count ? `Ep ${a.episodes_count}` : '',
-    released_on: clean(a.aired),
-    release_day: '',
-    type: clean(a.type),
-    href: a.url || '',
+/**
+ * Trigger scrape di animeapi. Data masuk ke database animeapi (Supabase).
+ * @returns hasil mentah dari animeapi {ok, results}
+ */
+export async function scrapeKurama(n = 10) {
+  const base = kuramaBase()
+  if (!(n > 0)) return { ok: true, results: [], skipped: true }
+  let res
+  try {
+    res = await fetch(`${base}/api/scrape/latest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ n }),
+    })
+  } catch (e) {
+    throw new Error(`animeapi tidak terjangkau di ${base}: ${e.message}`)
   }
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body.error || `animeapi scrape HTTP ${res.status}`)
+  return body
 }
 
 /**
- * Scrape via animeapi: trigger scrape di animeapi (kecuali n=0),
- * lalu import semua hasilnya ke tabel home.
- * @returns {source, total, inserted, skipped} — format sama seperti scrapeSource.
+ * List anime langsung dari database animeapi, dalam format baris yang sama
+ * seperti /api/home supaya tabel dashboard bisa pakai langsung.
  */
-export async function scrapeKurama(insertFn, n = 10) {
+export async function fetchKuramaList({ page = 1, limit = 20, q = '' } = {}) {
   const base = kuramaBase()
-  let triggered = null
-  if (n > 0) {
-    let res
-    try {
-      res = await fetch(`${base}/api/scrape/latest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ n }),
-      })
-    } catch (e) {
-      throw new Error(`animeapi tidak terjangkau di ${base}: ${e.message}`)
-    }
-    if (!res.ok) throw new Error(`animeapi scrape HTTP ${res.status}`)
-    triggered = await res.json()
+  const params = new URLSearchParams({
+    page: String(Math.max(1, parseInt(page) || 1)),
+    limit: String(Math.min(200, Math.max(1, parseInt(limit) || 20))),
+  })
+  if (q) params.set('q', q)
+  let res
+  try {
+    res = await fetch(`${base}/api/anime?${params}`)
+  } catch (e) {
+    throw new Error(`animeapi tidak terjangkau di ${base}: ${e.message}`)
   }
-  // Import (paginasi) — idempoten, duplikat dilewati insertFn.
-  let page = 1
-  let total = 0
-  let inserted = 0
-  for (;;) {
-    const res = await fetch(`${base}/api/anime?page=${page}&limit=200`)
-    if (!res.ok) throw new Error(`HTTP ${res.status} dari ${base}/api/anime`)
-    const json = await res.json()
-    const rows = json.rows ?? []
-    if (!rows.length) break
-    for (const a of rows) {
-      const item = mapKurama(a)
-      if (!item.title) continue
-      total++
-      if (insertFn(item)) inserted++
-    }
-    if (rows.length < 200) break
-    page++
+  if (!res.ok) throw new Error(`animeapi HTTP ${res.status}`)
+  const json = await res.json()
+  const rows = (json.rows ?? [])
+    .filter((a) => clean(a.title))
+    .map((a) => ({
+      anime_id: String(a.id),
+      title: clean(a.title),
+      poster: a.poster || '',
+      source: 'kurama',
+      episodes: a.episodes_count ? `Ep ${a.episodes_count}` : '',
+      released_on: clean(a.aired),
+      scraped_at: a.scraped_at || '',
+    }))
+  return {
+    rows,
+    total: json.total ?? rows.length,
+    page: json.page ?? 1,
+    limit: json.limit ?? rows.length,
   }
-  return { source: 'kurama', total, inserted, skipped: total - inserted, triggered }
 }
 
 /**

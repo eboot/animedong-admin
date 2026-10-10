@@ -276,8 +276,15 @@ const AnimeDetail = () => {
       <CCard className="mb-3">
         <CCardHeader>
           Detail Anime{' '}
-          <CBadge color={from === 'db' ? 'success' : 'warning'} className="ms-2">
-            {from === 'db' ? 'dari database' : 'dari API (belum disimpan)'}
+          <CBadge
+            color={from === 'db' ? 'success' : from === 'kurama' ? 'info' : 'warning'}
+            className="ms-2"
+          >
+            {from === 'db'
+              ? 'dari database'
+              : from === 'kurama'
+                ? 'dari database animeapi'
+                : 'dari API (belum disimpan)'}
           </CBadge>
         </CCardHeader>
         <CCardBody>
