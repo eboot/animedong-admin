@@ -117,6 +117,8 @@ Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=3002
+# Node di Oracle Cloud sering gagal fetch via IPv6 — paksa IPv4 dulu.
+Environment=NODE_OPTIONS=--dns-result-order=ipv4first
 # Kredensial Supabase (WAJIB): taruh di /etc/animeapi.env, format:
 #   SUPABASE_URL=https://xyz.supabase.co
 #   SUPABASE_SECRET_KEY=...
