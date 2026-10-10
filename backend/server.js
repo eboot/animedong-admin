@@ -9,6 +9,7 @@ import {
   listAnime,
   listSchedule,
   getAnimeDetail,
+  getAnimeSource,
   saveAnimeDetail,
   getStreamUrl,
   saveStreamUrl,
@@ -43,6 +44,7 @@ import {
   getSchedulerStatus,
   runAllSchedulesNow,
 } from './scheduler.js'
+import { scrapeKurama, fetchKuramaDetail, kuramaStatus } from './kurama.js'
 import { r2Enabled } from './r2.js'
 import { syncPostersToR2 } from './r2-sync.js'
 
@@ -110,8 +112,18 @@ app.post('/api/scrape', async (req, res) => {
       : Object.keys(SOURCES).find((k) => SOURCES[k].url === source)
   if (!key) {
     return res.status(400).json({
-      error: 'Pilih sumber dulu: animehome | animebrowse | schedule',
+      error: 'Pilih sumber dulu: animehome | animebrowse | kurama | schedule',
     })
+  }
+  // Sumber kurama: scrape lewat API animeapi (backend/kurama.js).
+  if (key === 'kurama') {
+    try {
+      const result = await scrapeKurama(insertAnime, req.body?.n ?? 10)
+      triggerR2Sync()
+      return res.json({ ok: true, ...result })
+    } catch (e) {
+      return res.status(502).json({ ok: false, error: e.message })
+    }
   }
   try {
     const result = await scrapeSource(key, insertAnime)
@@ -136,6 +148,7 @@ app.get('/api/schedule', (req, res) => {
 })
 
 // Detail anime: dari database bila ada, bila belum — ambil live dari API.
+// Anime bersumber 'kurama' diambil lewat animeapi (bukan otakudesu).
 // Param ?fresh=1 memaksa ambil live walau sudah ada di database.
 app.get('/api/anime/:animeId', async (req, res) => {
   const { animeId } = req.params
@@ -144,11 +157,18 @@ app.get('/api/anime/:animeId', async (req, res) => {
     if (saved) return res.json({ from: 'db', data: saved })
   }
   try {
-    const data = await fetchAnimeDetail(animeId)
+    const source = getAnimeSource(animeId)
+    const data =
+      source === 'kurama' ? await fetchKuramaDetail(animeId) : await fetchAnimeDetail(animeId)
     res.json({ from: 'live', data })
   } catch (e) {
     res.status(502).json({ error: e.message })
   }
+})
+
+// Status koneksi ke animeapi (sumber kurama).
+app.get('/api/kurama/status', async (req, res) => {
+  res.json(await kuramaStatus())
 })
 
 // Simpan / update detail anime (dari form edit)

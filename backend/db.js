@@ -201,6 +201,14 @@ export function listSchedule({ day, q, page = 1, limit = 100 } = {}) {
   return { total, page, limit, rows, days: DAY_ORDER }
 }
 
+/** Sumber (source) sebuah anime dari tabel home, untuk routing detail. */
+export function getAnimeSource(animeId) {
+  const row = db
+    .prepare(`SELECT source FROM home WHERE anime_id = ? LIMIT 1`)
+    .get(String(animeId))
+  return row?.source ?? null
+}
+
 export function getAnimeDetail(animeId) {
   const row = db.prepare(`SELECT * FROM anime_detail WHERE anime_id = ?`).get(animeId)
   if (!row) return null

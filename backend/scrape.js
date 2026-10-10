@@ -15,6 +15,12 @@ export const SOURCES = {
     label: 'Browse',
     url: 'http://168.110.213.108/otakudesu/anime',
   },
+  kurama: {
+    label: 'Kurama (via animeapi)',
+    // Sumber khusus: datanya diambil lewat API animeapi (backend/kurama.js),
+    // bukan fetch langsung seperti sumber lain.
+    url: 'kurama://animeapi',
+  },
 }
 
 export const SCHEDULE_SOURCE = {
