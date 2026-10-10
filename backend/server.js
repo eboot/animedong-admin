@@ -43,6 +43,19 @@ import {
   getSchedulerStatus,
   runAllSchedulesNow,
 } from './scheduler.js'
+import { r2Enabled } from './r2.js'
+import { syncPostersToR2 } from './r2-sync.js'
+
+// Mirror poster/cover ke R2 di background sehabis scrape (tidak blokir response).
+let r2Running = false
+function triggerR2Sync() {
+  if (!r2Enabled() || r2Running) return
+  r2Running = true
+  syncPostersToR2()
+    .then((r) => console.log('[r2] sync selesai:', JSON.stringify(r)))
+    .catch((e) => console.error('[r2] sync gagal:', e.message))
+    .finally(() => { r2Running = false })
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -85,6 +98,7 @@ app.post('/api/scrape', async (req, res) => {
   if (source === 'schedule' || source === SCHEDULE_SOURCE.url) {
     try {
       const result = await scrapeSchedule(insertSchedule)
+      triggerR2Sync()
       return res.json({ ok: true, ...result })
     } catch (e) {
       return res.status(502).json({ ok: false, error: e.message })
@@ -101,6 +115,7 @@ app.post('/api/scrape', async (req, res) => {
   }
   try {
     const result = await scrapeSource(key, insertAnime)
+    triggerR2Sync()
     res.json({ ok: true, ...result })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
@@ -186,6 +201,7 @@ app.get('/api/scheduler/status', (req, res) => {
 app.post('/api/scheduler/run', async (req, res) => {
   try {
     const result = await runAllSchedulesNow()
+    triggerR2Sync()
     res.json({ ok: true, data: result })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
@@ -235,6 +251,7 @@ app.post('/api/donghua/scrape', async (req, res) => {
   }
   try {
     const result = await scrapeDonghua(insertDonghua)
+    triggerR2Sync()
     res.json({ ok: true, ...result })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
@@ -259,10 +276,20 @@ app.get('/api/donghua/schedule', (req, res) => {
 app.post('/api/donghua/schedule/scrape', async (req, res) => {
   try {
     const result = await scrapeDonghuaSchedule(insertDonghuaSchedule)
+    triggerR2Sync()
     res.json({ ok: true, ...result, url: DONGHUA_SCHEDULE_SOURCE.url })
   } catch (e) {
     res.status(502).json({ ok: false, error: e.message })
   }
+})
+
+// R2 CDN image: status + trigger sync manual (jalan di background)
+app.get('/api/r2/status', (req, res) => res.json({ ok: true, enabled: r2Enabled() }))
+app.post('/api/r2/sync', async (req, res) => {
+  if (!r2Enabled()) return res.status(400).json({ ok: false, error: 'R2 belum dikonfigurasi (cek env R2_*)' })
+  if (r2Running) return res.json({ ok: true, message: 'sync sudah jalan' })
+  triggerR2Sync()
+  res.json({ ok: true, message: 'sync dimulai di background' })
 })
 
 // Detail donghua: dari database bila ada, bila belum — ambil live dari API.
