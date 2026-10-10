@@ -16,7 +16,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '')
 const UPSTREAM = 'http://168.110.213.108/donghua'
 
 const FIELDS = [

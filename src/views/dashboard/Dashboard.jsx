@@ -18,7 +18,7 @@ import CIcon from '@coreui/icons-react'
 import { cilCalendar, cilLayers, cilLink, cilVideo } from '@coreui/icons'
 import { CChartBar, CChartDoughnut } from '@coreui/react-chartjs'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '')
 
 const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu']
 const PALETTE = [
